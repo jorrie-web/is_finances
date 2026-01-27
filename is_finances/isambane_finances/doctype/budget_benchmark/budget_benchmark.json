@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "format:{fiscal_year}-{company}",
+ "creation": "2025-12-28 14:43:35.824343",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "fiscal_year",
+  "company",
+  "account_benchmark",
+  "budget_benchmark_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "fiscal_year",
+   "fieldtype": "Link",
+   "label": "Fiscal Year",
+   "options": "Fiscal Year"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "account_benchmark",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Account Benchmark",
+   "options": "Account Benchmark"
+  },
+  {
+   "fieldname": "budget_benchmark_html",
+   "fieldtype": "HTML",
+   "label": "Budget Benchmark HTML"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-12-28 19:00:05.749935",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "Budget Benchmark",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

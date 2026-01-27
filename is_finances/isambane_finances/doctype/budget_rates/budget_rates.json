@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "autoname": "format:{fiscal_year}-{company}",
+ "creation": "2025-12-16 10:23:23.698257",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_and_non_staff_tab",
+  "fiscal_year",
+  "company",
+  "item_budget_rates",
+  "item_budget_rates_display",
+  "tab_2_tab",
+  "staff_rates",
+  "staff_rates_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "fiscal_year",
+   "fieldtype": "Link",
+   "label": "Fiscal Year",
+   "options": "Fiscal Year"
+  },
+  {
+   "fieldname": "item_budget_rates",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Item Budget Rates",
+   "options": "Item Budget Rate"
+  },
+  {
+   "fieldname": "item_budget_rates_display",
+   "fieldtype": "HTML",
+   "label": "Item Budget Rates"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "details_and_non_staff_tab",
+   "fieldtype": "Tab Break",
+   "label": "Details and Non Staff"
+  },
+  {
+   "fieldname": "tab_2_tab",
+   "fieldtype": "Tab Break",
+   "label": "Staff Budget Rates and Accounts"
+  },
+  {
+   "fieldname": "staff_rates",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Staff Rates",
+   "options": "Budget Headcount Rates"
+  },
+  {
+   "fieldname": "staff_rates_html",
+   "fieldtype": "HTML",
+   "label": "Staff Rates HTML"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-12-28 21:27:09.333658",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "Budget Rates",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
