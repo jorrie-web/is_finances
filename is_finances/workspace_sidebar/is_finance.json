@@ -1,0 +1,28 @@
+{
+ "app": "is_finances",
+ "creation": "2026-08-05 14:35:46.212007",
+ "docstatus": 0,
+ "doctype": "Workspace Sidebar",
+ "header_icon": "dollar-sign",
+ "idx": 0,
+ "items": [
+  {
+   "child": 0,
+   "collapsible": 1,
+   "icon": "chart-spline",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Sage Connector",
+   "link_to": "IS Finance Setup",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-05 14:36:32.187792",
+ "modified_by": "Administrator",
+ "name": "IS Finance",
+ "owner": "Administrator",
+ "standard": 1,
+ "title": "IS Finance"
+}

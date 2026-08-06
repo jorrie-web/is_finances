@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-08-05 14:30:34.958511",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connect_to_sage_database",
+  "sage_database_url",
+  "sage_database_user",
+  "sage_database_password"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "fieldname": "connect_to_sage_database",
+   "fieldtype": "Check",
+   "label": "Connect To Sage Database"
+  },
+  {
+   "depends_on": "eval:doc.connect_to_sage_database == 1",
+   "description": "Must be complete ODBC connection string without username or password:\nmssql://sql-server.example.local:1433/SageDatabase",
+   "fieldname": "sage_database_url",
+   "fieldtype": "Data",
+   "label": "Sage Database URL",
+   "mandatory_depends_on": "eval:doc.connect_to_sage_database == 1",
+   "options": "URL"
+  },
+  {
+   "depends_on": "eval:doc.connect_to_sage_database == 1",
+   "fieldname": "sage_database_user",
+   "fieldtype": "Data",
+   "label": "Sage Database User",
+   "mandatory_depends_on": "eval:doc.connect_to_sage_database == 1"
+  },
+  {
+   "depends_on": "eval:doc.connect_to_sage_database == 1",
+   "fieldname": "sage_database_password",
+   "fieldtype": "Password",
+   "label": "Sage Database Password",
+   "mandatory_depends_on": "eval:doc.connect_to_sage_database == 1"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-05 14:48:43.879185",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Finance Setup",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,189 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-03-12 15:38:14.059720",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "tran_date",
+  "reference",
+  "description",
+  "debit",
+  "credit",
+  "amount",
+  "source_row",
+  "source_page",
+  "match_key",
+  "match_key_tracked",
+  "reconciled",
+  "manual_matched",
+  "is_opening_balance",
+  "is_closing_balance",
+  "unmatched_category",
+  "unmatched_notes",
+  "parser_name",
+  "source_text",
+  "tr_code",
+  "audit_no",
+  "match_key_issue_type",
+  "match_key_issue_notes"
+ ],
+ "fields": [
+  {
+   "columns": 1,
+   "fieldname": "tran_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Transaction Date"
+  },
+  {
+   "columns": 1,
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Description"
+  },
+  {
+   "columns": 1,
+   "fieldname": "debit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Debit",
+   "precision": "2"
+  },
+  {
+   "columns": 1,
+   "fieldname": "credit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Credit",
+   "precision": "2"
+  },
+  {
+   "columns": 1,
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "source_row",
+   "fieldtype": "Int",
+   "in_standard_filter": 1,
+   "label": "Source Row"
+  },
+  {
+   "fieldname": "source_page",
+   "fieldtype": "Int",
+   "label": "Source Page"
+  },
+  {
+   "fieldname": "match_key",
+   "fieldtype": "Data",
+   "label": "Match Key"
+  },
+  {
+   "fieldname": "match_key_tracked",
+   "fieldtype": "Data",
+   "label": "Match key (Tracked)"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "fieldname": "reconciled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Reconciled"
+  },
+  {
+   "default": "0",
+   "fieldname": "manual_matched",
+   "fieldtype": "Check",
+   "label": "Manual Matched"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "fieldname": "is_opening_balance",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Opening Balance"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "fieldname": "is_closing_balance",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Closing Balance"
+  },
+  {
+   "fieldname": "unmatched_category",
+   "fieldtype": "Link",
+   "label": "Unmatched Category",
+   "options": "IS Recon Category"
+  },
+  {
+   "fieldname": "unmatched_notes",
+   "fieldtype": "Small Text",
+   "label": "Unmatched Notes"
+  },
+  {
+   "fieldname": "parser_name",
+   "fieldtype": "Data",
+   "label": "Parser Name"
+  },
+  {
+   "fieldname": "source_text",
+   "fieldtype": "Small Text",
+   "label": "Source Text"
+  },
+  {
+   "columns": 1,
+   "fieldname": "reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reference"
+  },
+  {
+   "fieldname": "tr_code",
+   "fieldtype": "Data",
+   "label": "Transaction Code"
+  },
+  {
+   "fieldname": "audit_no",
+   "fieldtype": "Data",
+   "label": "Audit No"
+  },
+  {
+   "fieldname": "match_key_issue_type",
+   "fieldtype": "Link",
+   "label": "Match Key Issue Type",
+   "options": "IS Match Key Issue Type"
+  },
+  {
+   "fieldname": "match_key_issue_notes",
+   "fieldtype": "Small Text",
+   "label": "Match Key Issue Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-03-12 18:39:47.396708",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "Creditor Statement Child",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

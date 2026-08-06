@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-03-05 11:37:57.353577",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "identification_section",
+  "parser_name",
+  "supplier",
+  "supplier_code",
+  "is_active",
+  "priority",
+  "match_on",
+  "pdf_extraction__preprocessing_section",
+  "extractor",
+  "collapse_whitespace",
+  "page_start",
+  "page_end",
+  "skip_lines_regex",
+  "stop_at_regex",
+  "section_break_stnb",
+  "row_regex",
+  "section_break_smun",
+  "date_format",
+  "ref_normalization",
+  "amount_style",
+  "amount_rules_section",
+  "amount_sign_rule",
+  "opening_balance_regex",
+  "closing_balance_regex"
+ ],
+ "fields": [
+  {
+   "fieldname": "parser_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Parser Name"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fetch_from": "supplier.custom_supplier_code",
+   "fieldname": "supplier_code",
+   "fieldtype": "Data",
+   "label": "Supplier Code",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Active"
+  },
+  {
+   "description": "if multiple rules could match, highest wins",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Priority"
+  },
+  {
+   "fieldname": "identification_section",
+   "fieldtype": "Section Break",
+   "label": "Identification"
+  },
+  {
+   "fieldname": "match_on",
+   "fieldtype": "Select",
+   "label": "Match On",
+   "options": "Supplier\nSupplier Code\nPDF Text Contains\nRegex"
+  },
+  {
+   "fieldname": "pdf_extraction__preprocessing_section",
+   "fieldtype": "Section Break",
+   "label": "PDF Extraction / Preprocessing"
+  },
+  {
+   "fieldname": "extractor",
+   "fieldtype": "Select",
+   "label": "Extractor",
+   "options": "pypdf\npdfplummer\nauto\nocr"
+  },
+  {
+   "default": "1",
+   "fieldname": "collapse_whitespace",
+   "fieldtype": "Check",
+   "label": "Collapse Whitespace"
+  },
+  {
+   "description": "Optional",
+   "fieldname": "page_start",
+   "fieldtype": "Int",
+   "label": "Page Start"
+  },
+  {
+   "description": "Optional",
+   "fieldname": "page_end",
+   "fieldtype": "Int",
+   "label": "Page End"
+  },
+  {
+   "description": "lines to ignore (headers/footers)",
+   "fieldname": "skip_lines_regex",
+   "fieldtype": "Code",
+   "label": "Skip Lines Regex"
+  },
+  {
+   "description": "stop parsing after match (e.g. totals section)",
+   "fieldname": "stop_at_regex",
+   "fieldtype": "Code",
+   "label": "Stop at Regex"
+  },
+  {
+   "fieldname": "section_break_stnb",
+   "fieldtype": "Section Break",
+   "label": "Transaction Row Detection"
+  },
+  {
+   "description": "the main regex to capture a transaction line\n\n(Use named groups like (?P...) (?P...) (?P...) (?P...))",
+   "fieldname": "row_regex",
+   "fieldtype": "Code",
+   "label": "Row Regex"
+  },
+  {
+   "fieldname": "section_break_smun",
+   "fieldtype": "Section Break",
+   "label": "Captured Formats"
+  },
+  {
+   "description": "e.g. \"%d%b%y\" if your date is 02Jan26",
+   "fieldname": "date_format",
+   "fieldtype": "Data",
+   "label": "Date Format"
+  },
+  {
+   "description": "match your _normalize_ref() logic",
+   "fieldname": "ref_normalization",
+   "fieldtype": "Select",
+   "label": "Ref Normalisation",
+   "options": "remove spaces + uppercase"
+  },
+  {
+   "fieldname": "amount_style",
+   "fieldtype": "Select",
+   "label": "Amount Style",
+   "options": "debit_credit_columns\nsingle_amount_signed\nsingle_amount_unsigned\npick_non_zero_last_two"
+  },
+  {
+   "fieldname": "amount_rules_section",
+   "fieldtype": "Section Break",
+   "label": "Amount Rules"
+  },
+  {
+   "fieldname": "amount_sign_rule",
+   "fieldtype": "Select",
+   "label": "Amount Sign Rule",
+   "options": "credit_positive\ndebit_positive\nnegative_means_credit\nabsolute_non_zero"
+  },
+  {
+   "description": "Example regex patterns\n\nLabel: \u201cOpening Balance 1,234.56\u201d\n\n(?i)\\bopening\\s+balance\\b.*?(?P-?\\d{1,3}(?:[,\\s]\\d{3})*\\.\\d{2})\n\nLabel: \u201cBalance B/F 1234.56\u201d\n\n(?i)\\bbalance\\s*b/?f\\b.*?(?P-?\\d+(?:[,\\s]\\d{3})*\\.\\d{2})\n\nLabel: \u201cB/Fwd: (1 234.56)\u201d (parentheses = negative)\n\n(?i)\\bb/?f(?:wd)?\\b.*?(?P\\(?-?\\d{1,3}(?:[,\\s]\\d{3})*\\.\\d{2}\\)?)",
+   "fieldname": "opening_balance_regex",
+   "fieldtype": "Code",
+   "label": "Opening Balance Regex"
+  },
+  {
+   "description": "Example regex patterns\n\n\u201cClosing Balance 9,999.99\u201d\n\n(?i)\\bclosing\\s+balance\\b.*?(?P-?\\d{1,3}(?:[,\\s]\\d{3})*\\.\\d{2})\n\n\u201cBalance C/F 9999.99\u201d\n\n(?i)\\bbalance\\s*c/?f\\b.*?(?P-?\\d+(?:[,\\s]\\d{3})*\\.\\d{2})\n\n\u201cStatement Balance: 9999.99\u201d\n\n(?i)\\bstatement\\s+balance\\b.*?(?P-?\\d{1,3}(?:[,\\s]\\d{3})*\\.\\d{2})",
+   "fieldname": "closing_balance_regex",
+   "fieldtype": "Code",
+   "label": "Closing Balance Regex"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-10 13:12:01.581891",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Supplier Statement Parser",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

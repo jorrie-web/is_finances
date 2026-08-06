@@ -6,6 +6,12 @@ Internal Financial Management Suite for Isambane Mining
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
+Note, this app requires external dependencies, including tessaract-ocr, it can be installed using apt in debian / ubuntu:
+
+```bash
+sudo apt install -y tesseract-ocr
+```
+
 ```bash
 cd $PATH_TO_YOUR_BENCH
 bench get-app $URL_OF_THIS_REPO --branch develop

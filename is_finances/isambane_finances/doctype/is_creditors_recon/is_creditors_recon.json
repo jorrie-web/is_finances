@@ -1,0 +1,248 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "Format: {supplier_code}-{recon_date}",
+ "creation": "2026-02-18 20:18:43.112432",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "supplier",
+  "supplier_code",
+  "recon_date",
+  "sup_statement",
+  "sage_transactions",
+  "imported_on",
+  "import_hash",
+  "column_break_nogc",
+  "o_balance",
+  "closing_balance",
+  "opening_date",
+  "closing_date",
+  "statement_parser",
+  "parser_used",
+  "statement_opening_balance",
+  "statement_closing_balance",
+  "erp_matched_total",
+  "erp_unmatched_total",
+  "statement_matched_total",
+  "statement_unmatched_total",
+  "closing_variance",
+  "section_break_pqxa",
+  "processed_transactions",
+  "section_break_gknv",
+  "statement_transactions",
+  "recon_presentation_tab",
+  "reconciliation_presentation",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recon_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Recon Month End",
+   "mask": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "sup_statement",
+   "fieldtype": "Attach",
+   "label": "Supplier Statement"
+  },
+  {
+   "fetch_from": "supplier.custom_supplier_code",
+   "fieldname": "supplier_code",
+   "fieldtype": "Data",
+   "label": "Supplier Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_nogc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "o_balance",
+   "fieldtype": "Currency",
+   "label": "Opening Balance",
+   "precision": "2"
+  },
+  {
+   "fieldname": "closing_balance",
+   "fieldtype": "Currency",
+   "label": "Closing Balance",
+   "precision": "2"
+  },
+  {
+   "fieldname": "opening_date",
+   "fieldtype": "Date",
+   "label": "Opening Date"
+  },
+  {
+   "fieldname": "closing_date",
+   "fieldtype": "Date",
+   "label": "Closing Date"
+  },
+  {
+   "fieldname": "section_break_pqxa",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "processed_transactions",
+   "fieldtype": "Table",
+   "label": "Processed Transactions",
+   "options": "Creditor Recon Child"
+  },
+  {
+   "fieldname": "reconciliation_presentation",
+   "fieldtype": "HTML",
+   "label": "Reconciliation Presentation"
+  },
+  {
+   "fieldname": "sage_transactions",
+   "fieldtype": "Attach",
+   "label": "Supplier Sage Transactions"
+  },
+  {
+   "fieldname": "imported_on",
+   "fieldtype": "Datetime",
+   "label": "Imported On"
+  },
+  {
+   "fieldname": "import_hash",
+   "fieldtype": "Data",
+   "label": "Import Hash"
+  },
+  {
+   "fieldname": "recon_presentation_tab",
+   "fieldtype": "Tab Break",
+   "label": "Recon Presentation"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "IS Creditors Recon",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "description": "(optional \u201coverride\u201d)",
+   "fieldname": "statement_parser",
+   "fieldtype": "Link",
+   "label": "Statement Parser",
+   "options": "IS Supplier Statement Parser"
+  },
+  {
+   "fieldname": "parser_used",
+   "fieldtype": "Data",
+   "label": "Parser Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_gknv",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "statement_transactions",
+   "fieldtype": "Table",
+   "label": "Statement Transactions",
+   "options": "Creditor Statement Child"
+  },
+  {
+   "fieldname": "statement_opening_balance",
+   "fieldtype": "Currency",
+   "label": "Statement Opening Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "statement_closing_balance",
+   "fieldtype": "Currency",
+   "label": "Statement Closing Balance",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_matched_total",
+   "fieldtype": "Currency",
+   "label": "ERP Matched Total",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_unmatched_total",
+   "fieldtype": "Currency",
+   "label": "ERP Unmatched Total",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "statement_matched_total",
+   "fieldtype": "Currency",
+   "label": "Statement Matched Total",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "statement_unmatched_total",
+   "fieldtype": "Currency",
+   "label": "Statement Unmatched Total",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_variance",
+   "fieldtype": "Currency",
+   "label": "Closing Variance",
+   "precision": "2",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-03-12 19:10:29.288125",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Creditors Recon",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
