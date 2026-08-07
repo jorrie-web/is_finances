@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-08-07 09:42:55.654318",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "sage_database_url",
+  "sage_database_user",
+  "sage_database_password"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Frappe Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "description": "Must be complete ODBC connection string without username or password:\nmssql://sql-server.example.local:1433/SageDatabase",
+   "fieldname": "sage_database_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Sage Database URL",
+   "options": "URL",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sage_database_user",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Sage Database User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sage_database_password",
+   "fieldtype": "Password",
+   "in_list_view": 1,
+   "label": "Sage Database Password",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-07 09:44:41.317138",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Finance Setup Table",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
