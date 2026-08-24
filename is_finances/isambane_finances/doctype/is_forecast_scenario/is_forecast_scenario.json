@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "autoname": "field:scenario_name",
+ "creation": "2026-08-23 09:58:42.394340",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_cvaq",
+  "scenario_name",
+  "company",
+  "scenario_type",
+  "forecast_start_month",
+  "horizon_months",
+  "forecast_end_month",
+  "status",
+  "based_on_scenario",
+  "actual_cutoff_date",
+  "description",
+  "notes",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_cvaq",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "scenario_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Scenario Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scenario_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Scenario Type",
+   "options": "Base\nUpside\nDownside\nBoard\nLender\nOther",
+   "reqd": 1
+  },
+  {
+   "description": "Always normalize to first day of month",
+   "fieldname": "forecast_start_month",
+   "fieldtype": "Date",
+   "label": "Forecast Start Month",
+   "reqd": 1
+  },
+  {
+   "default": "60",
+   "fieldname": "horizon_months",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Horizon Months",
+   "reqd": 1
+  },
+  {
+   "description": "Automatically Calculated",
+   "fieldname": "forecast_end_month",
+   "fieldtype": "Date",
+   "label": "Forecast End Month",
+   "read_only": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nApproved\nArchived",
+   "reqd": 1
+  },
+  {
+   "fieldname": "based_on_scenario",
+   "fieldtype": "Link",
+   "label": "Based On Scenario",
+   "options": "IS Forecast Scenario"
+  },
+  {
+   "fieldname": "actual_cutoff_date",
+   "fieldtype": "Date",
+   "label": "Actual Cut-off Date"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text Editor",
+   "label": "Notes"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 19:26:56.695183",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Forecast Scenario",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

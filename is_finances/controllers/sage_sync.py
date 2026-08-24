@@ -6,19 +6,28 @@ to one or more external Microsoft SQL Server databases used by Sage.
 
 Current scope
 -------------
-At this stage, the controller performs only connection tests:
+The controller provides both connection testing and incremental POSTGL import:
 
 1. Load the ``IS Finance Setup`` singleton.
 2. Check whether Sage database connectivity is enabled.
-3. Read the configured Sage database connections from the
-   ``database_connections`` child table.
-4. Validate each configured Company, server URL, username, and password.
-5. Open a connection to each Microsoft SQL Server.
-6. Execute ``SELECT 1`` to confirm that the connection is operational.
-7. Close each connection.
-8. Write the outcome to the site-specific Sage Sync log.
+3. Read and validate each configured Sage company database.
+4. Read only new ``POSTGL`` rows where ``AutoIdx`` is greater than that
+   connection row's ``last_postgl_auto_idx``.
+5. For each POSTGL row, use ``POSTGL.AccountLink`` only as a lookup key into
+   the Sage ``Accounts`` table to retrieve ``Master_Sub_Account``, ``Brch``,
+   account ``Description``, and ``iAccountType``.
+6. Read the project ID from ``POSTGL.Project`` and use it only as a lookup key
+   into the Sage ``Project`` table via ``Project.ProjectLink`` to retrieve
+   ``ProjectCode``, ``ProjectName``, and ``ProjectDescription``.
+7. POSTGL remains the master/driving table: Accounts and Project can enrich a
+   POSTGL row but can never create additional ERP transaction rows themselves.
+8. Bulk insert the completed rows into the Frappe ``Sage POSTGL Entry`` DocType.
+9. Advance the per-company high-water mark only after a successful batch.
+10. Never insert, update, or delete records in the Sage SQL Server database.
 
-No Sage data is currently read, inserted, updated, or deleted.
+The global ``postgl_sync_record_limit`` setting controls how many new records
+are imported per Company per run. 0 means unlimited; unlimited mode is still
+processed in bounded batches.
 
 Multi-company design
 --------------------
@@ -99,12 +108,14 @@ should not be embedded in the URL or ODBC connection string.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 import frappe
+from frappe.utils import now_datetime
 
 
 SETTINGS_DOCTYPE = "IS Finance Setup"
@@ -121,6 +132,21 @@ DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30
 # invocation may connect to several company databases.
 JOB_LOCK_KEY = "is_finances:sage_sync:connection_test_lock"
 JOB_LOCK_TIMEOUT_SECONDS = 10 * 60
+
+# POSTGL incremental synchronisation configuration.
+POSTGL_TARGET_DOCTYPE = "Sage POSTGL Entry"
+POSTGL_SOURCE_TABLE = "POSTGL"
+ACCOUNTS_SOURCE_TABLE = "Accounts"
+PROJECT_SOURCE_TABLE = "Project"
+POSTGL_RECORD_LIMIT_FIELD = "postgl_sync_record_limit"
+
+# Blank/missing uses a safe first-run default. Set 0 in IS Finance Setup for
+# unlimited records per Company per run.
+DEFAULT_POSTGL_RECORD_LIMIT = 100
+
+# Unlimited mode still fetches/inserts in bounded batches.
+POSTGL_FETCH_BATCH_SIZE = 1000
+POSTGL_BULK_INSERT_CHUNK_SIZE = 1000
 
 
 @dataclass(frozen=True)
@@ -148,6 +174,7 @@ class SageDatabaseSettings:
     username: str
     password: str = field(repr=False)
     row_name: str = ""
+    last_postgl_auto_idx: int = 0
 
 
 class SageSyncConfigurationError(Exception):
@@ -166,87 +193,452 @@ class SageConnectionTestError(Exception):
 
 def run_daily_sage_sync() -> None:
     """
-    Scheduled entry point for the daily Sage synchronisation job.
+    Scheduled entry point for the daily incremental Sage POSTGL sync.
 
-    This method is intended to be referenced by ``scheduler_events`` in
-    ``hooks.py`` under ``daily_long``.
-
-    At present, it performs only connection tests. Later, the connection-test
-    stage can be followed by the actual Sage extraction and synchronisation
-    workflow for each configured Company.
-
-    The exception is deliberately re-raised after logging. This is important
-    because Frappe must receive the exception to mark the scheduled/background
-    job as failed rather than incorrectly recording it as successful.
-
-    All configured companies are tested during one invocation. A failure for
-    one company does not prevent the remaining companies from being tested.
-    After all companies have been attempted, the job is marked failed if any
-    connection failed.
+    Existing Scheduled Job Types may continue to point to this function.
+    Connection-only diagnostics remain available via
+    ``test_sage_database_connections``.
     """
-    logger = _get_logger()
+    run_sage_postgl_sync()
 
-    logger.info("Daily Sage database connection job started.")
+
+def run_sage_postgl_sync() -> None:
+    """Run the incremental POSTGL sync under a distributed lock."""
+    logger = _get_logger()
+    logger.info("Sage POSTGL sync job started.")
 
     lock = frappe.cache.lock(
         JOB_LOCK_KEY,
         timeout=JOB_LOCK_TIMEOUT_SECONDS,
     )
-
     acquired = lock.acquire(blocking=False)
 
     if not acquired:
         logger.warning(
-            "Sage database connection job skipped because another Sage "
-            "connection job is already running."
+            "Sage POSTGL sync skipped because another Sage sync job is running."
         )
         return
 
     try:
-        result = test_sage_database_connections()
+        result = sync_sage_postgl()
 
         if result["status"] == "disabled":
             logger.info(
-                "Daily Sage database connection job completed without testing "
-                "connections because Sage integration is disabled."
+                "Sage POSTGL sync skipped because Sage integration is disabled."
             )
             return
 
         logger.info(
-            "Daily Sage database connection job completed successfully. "
-            "%s Sage database connection(s) were opened, tested, and closed.",
-            result["tested"],
+            "Sage POSTGL sync completed successfully. "
+            "%s row(s) processed across %s Company connection(s).",
+            result["processed"],
+            result["companies_tested"],
         )
 
     except Exception:
-        logger.error(
-            "Daily Sage database connection job failed.",
-            exc_info=True,
-        )
-
-        # Create a Desk-visible Error Log while ensuring that our explicitly
-        # generated error messages contain no credentials.
-        #
-        # Note:
-        # Frappe may include local variables when rendering a traceback. For
-        # that reason the settings dataclass hides the password from repr and
-        # the connection-test layer avoids keeping complete connection strings
-        # in long-lived local variables.
+        logger.error("Sage POSTGL sync job failed.", exc_info=True)
         frappe.log_error(
-            title="Sage Database Connection Failed",
+            title="Sage POSTGL Sync Failed",
             message=frappe.get_traceback(),
         )
-
-        # Re-raise so the Frappe Scheduled Job Log / background job correctly
-        # records the execution as failed.
         raise
 
     finally:
-        # Only release a lock that this process successfully acquired.
-        #
-        # The early-return path above occurs before entering this try/finally,
-        # so reaching this point means ``acquired`` is True.
         lock.release()
+
+
+def sync_sage_postgl(
+    company: str | None = None,
+) -> dict[str, Any]:
+    """
+    Incrementally import new Sage POSTGL rows into Sage POSTGL Entry.
+
+    IS Finance Setup.postgl_sync_record_limit:
+      blank/missing -> 100
+      positive N    -> at most N rows per Company per run
+      0             -> unlimited
+
+    IS Finance Setup Table.last_postgl_auto_idx is the durable per-company
+    high-water mark and is advanced only with a successfully committed batch.
+    """
+    logger = _get_logger()
+    settings_doc = frappe.get_doc(SETTINGS_DOCTYPE)
+
+    if not settings_doc.get("connect_to_sage_database"):
+        logger.info(
+            "Sage POSTGL sync skipped because 'Connect To Sage Database' "
+            "is disabled."
+        )
+        return {
+            "status": "disabled",
+            "message": "Sage database integration is disabled.",
+            "processed": 0,
+            "companies_tested": 0,
+            "companies": [],
+        }
+
+    record_limit = _get_postgl_record_limit(settings_doc)
+    settings_list = _get_validated_database_settings(
+        settings_doc,
+        company=company,
+    )
+
+    results: list[dict[str, Any]] = []
+    failures: list[tuple[str, str]] = []
+
+    for settings in settings_list:
+        try:
+            results.append(
+                _sync_single_company_postgl(
+                    settings,
+                    record_limit=record_limit,
+                )
+            )
+        except Exception as exc:
+            frappe.db.rollback()
+            safe_message = _sanitise_exception_message(exc)
+            failures.append((settings.company, safe_message))
+            logger.error(
+                "Sage POSTGL sync failed for Company '%s': %s",
+                settings.company,
+                safe_message,
+                exc_info=True,
+            )
+
+    if failures:
+        summary = "; ".join(
+            f"{company_name}: {message}"
+            for company_name, message in failures
+        )
+        raise SageConnectionTestError(
+            f"{len(failures)} of {len(settings_list)} Sage POSTGL sync(s) "
+            f"failed. {summary}"
+        )
+
+    processed = sum(r["processed"] for r in results)
+
+    return {
+        "status": "success",
+        "message": "Sage POSTGL incremental sync completed.",
+        "record_limit": record_limit,
+        "processed": processed,
+        "companies_tested": len(results),
+        "companies": results,
+    }
+
+
+def _sync_single_company_postgl(
+    settings: SageDatabaseSettings,
+    *,
+    record_limit: int,
+) -> dict[str, Any]:
+    """Import only POSTGL rows newer than one Company's saved AutoIdx."""
+    logger = _get_logger()
+    pyodbc = _import_pyodbc()
+
+    starting_auto_idx = settings.last_postgl_auto_idx
+    high_water = starting_auto_idx
+    processed = 0
+    batches = 0
+    remaining = record_limit if record_limit > 0 else None
+
+    connection = None
+    cursor = None
+
+    logger.info(
+        "Starting Sage POSTGL sync for Company '%s' after AutoIdx %s. "
+        "Per-run limit=%s.",
+        settings.company,
+        starting_auto_idx,
+        "unlimited" if record_limit == 0 else record_limit,
+    )
+
+    try:
+        connection = pyodbc.connect(
+            _build_connection_string(settings),
+            timeout=DEFAULT_CONNECTION_TIMEOUT_SECONDS,
+            autocommit=True,
+        )
+        cursor = connection.cursor()
+
+        while remaining is None or remaining > 0:
+            fetch_size = POSTGL_FETCH_BATCH_SIZE
+            if remaining is not None:
+                fetch_size = min(fetch_size, remaining)
+
+            cursor.execute(
+                _build_postgl_select_sql(fetch_size),
+                high_water,
+            )
+            rows = cursor.fetchall()
+
+            if not rows:
+                break
+
+            batch_high_water = max(int(row[0]) for row in rows)
+            if batch_high_water <= high_water:
+                raise RuntimeError(
+                    "The Sage POSTGL query did not advance AutoIdx."
+                )
+
+            _bulk_insert_postgl_rows(
+                company=settings.company,
+                rows=rows,
+            )
+
+            frappe.db.set_value(
+                CONNECTION_CHILD_DOCTYPE,
+                settings.row_name,
+                "last_postgl_auto_idx",
+                str(batch_high_water),
+                update_modified=False,
+            )
+
+            frappe.db.commit()
+
+            batch_count = len(rows)
+            processed += batch_count
+            batches += 1
+            high_water = batch_high_water
+
+            if remaining is not None:
+                remaining -= batch_count
+
+            logger.info(
+                "Committed Sage POSTGL batch for Company '%s'. "
+                "Rows=%s, Last AutoIdx=%s.",
+                settings.company,
+                batch_count,
+                high_water,
+            )
+
+            if batch_count < fetch_size:
+                break
+
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                logger.warning(
+                    "Could not close Sage POSTGL cursor for Company '%s'.",
+                    settings.company,
+                    exc_info=True,
+                )
+
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                logger.warning(
+                    "Could not close Sage POSTGL connection for Company '%s'.",
+                    settings.company,
+                    exc_info=True,
+                )
+
+    return {
+        "company": settings.company,
+        "starting_auto_idx": starting_auto_idx,
+        "ending_auto_idx": high_water,
+        "processed": processed,
+        "batches": batches,
+    }
+
+
+def _get_postgl_record_limit(settings_doc: Any) -> int:
+    """Return POSTGL rows-per-Company per run; 0 means unlimited."""
+    raw_value = settings_doc.get(POSTGL_RECORD_LIMIT_FIELD)
+
+    if raw_value in (None, ""):
+        return DEFAULT_POSTGL_RECORD_LIMIT
+
+    try:
+        record_limit = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise SageSyncConfigurationError(
+            "POSTGL Sync Record Limit must be a whole number. "
+            "Use 0 for unlimited."
+        ) from exc
+
+    if record_limit < 0:
+        raise SageSyncConfigurationError(
+            "POSTGL Sync Record Limit cannot be negative. "
+            "Use 0 for unlimited."
+        )
+
+    return record_limit
+
+
+def _build_postgl_select_sql(fetch_size: int) -> str:
+    """
+    Build the read-only SQL Server query for the next POSTGL batch.
+
+    POSTGL is deliberately the master/driving table.
+
+    Account enrichment:
+      POSTGL.AccountLink -> Accounts.AccountLink
+
+    Project enrichment:
+      POSTGL.Project -> Project.ProjectLink
+
+    ``OUTER APPLY ... TOP 1`` is used for both lookup tables. This guarantees
+    that one POSTGL transaction can never be multiplied into multiple ERP
+    transactions if a lookup table unexpectedly contains duplicate keys.
+
+    Missing Accounts or Project matches do not suppress the POSTGL transaction;
+    the related lookup fields are simply returned as NULL.
+    """
+    fetch_size = int(fetch_size)
+
+    if fetch_size < 1:
+        raise ValueError("POSTGL fetch size must be at least 1.")
+
+    return f"""
+        SELECT TOP {fetch_size}
+            p.[AutoIdx],
+            p.[TxDate],
+            p.[AccountLink],
+            p.[TrCodeID],
+            p.[Debit],
+            p.[Credit],
+            p.[Description] AS [POSTGLDescription],
+            p.[Reference],
+
+            a.[Master_Sub_Account],
+            a.[Brch],
+            a.[Description] AS [AccountDescription],
+            a.[iAccountType],
+
+            p.[Project] AS [ProjectID],
+            pr.[ProjectCode],
+            pr.[ProjectName],
+            pr.[ProjectDescription]
+
+        FROM [{POSTGL_SOURCE_TABLE}] AS p
+
+        OUTER APPLY (
+            SELECT TOP 1
+                acc.[Master_Sub_Account],
+                acc.[Brch],
+                acc.[Description],
+                acc.[iAccountType]
+            FROM [{ACCOUNTS_SOURCE_TABLE}] AS acc
+            WHERE acc.[AccountLink] = p.[AccountLink]
+        ) AS a
+
+        OUTER APPLY (
+            SELECT TOP 1
+                proj.[ProjectCode],
+                proj.[ProjectName],
+                proj.[ProjectDescription]
+            FROM [{PROJECT_SOURCE_TABLE}] AS proj
+            WHERE proj.[ProjectLink] = p.[Project]
+        ) AS pr
+
+        WHERE p.[AutoIdx] > ?
+        ORDER BY p.[AutoIdx] ASC
+    """
+
+
+def _bulk_insert_postgl_rows(
+    *,
+    company: str,
+    rows: list[Any],
+) -> None:
+    """
+    Bulk insert a POSTGL-master batch enriched by Accounts and Project.
+
+    Row positions:
+      0-7   POSTGL transaction fields
+      8-11  Accounts lookup fields
+      12    POSTGL.Project (project ID)
+      13-15 Project lookup fields
+
+    Frappe document names are deterministic hashes of Company + AutoIdx, making
+    retries idempotent even though AutoIdx can repeat across Sage companies.
+    """
+    if not rows:
+        return
+
+    timestamp = now_datetime()
+    owner = (
+        frappe.session.user
+        if getattr(frappe, "session", None)
+        and frappe.session.user
+        and frappe.session.user != "Guest"
+        else "Administrator"
+    )
+
+    fields = [
+        "name",
+        "creation",
+        "modified",
+        "modified_by",
+        "owner",
+        "docstatus",
+        "company",
+        "sage_auto_idx",
+        "tx_date",
+        "account_link",
+        "tr_code_id",
+        "debit",
+        "credit",
+        "description",
+        "reference",
+        "master_sub_account",
+        "brch",
+        "sage_account_description",
+        "iaccounttype",
+        "sage_projectid",
+        "sage_projectcode",
+        "sage_projectname",
+        "sage_project_description",
+    ]
+
+    values = []
+    for row in rows:
+        auto_idx = int(row[0])
+        values.append(
+            (
+                _make_postgl_docname(company, auto_idx),
+                timestamp,
+                timestamp,
+                owner,
+                owner,
+                0,
+                company,
+                str(auto_idx),
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5],
+                row[6],
+                row[7],
+                row[8],
+                row[9],
+                row[10],
+                row[11],
+                row[12],
+                row[13],
+                row[14],
+                row[15],
+            )
+        )
+
+    frappe.db.bulk_insert(
+        POSTGL_TARGET_DOCTYPE,
+        fields,
+        values,
+        ignore_duplicates=True,
+        chunk_size=POSTGL_BULK_INSERT_CHUNK_SIZE,
+    )
+
+
+def _make_postgl_docname(company: str, auto_idx: int) -> str:
+    """Return a deterministic cross-company Frappe document name."""
+    raw_key = f"{company}\x1f{auto_idx}".encode("utf-8")
+    return hashlib.sha256(raw_key).hexdigest()
 
 
 def test_sage_database_connections(
@@ -640,6 +1032,27 @@ def _get_validated_database_settings(
         database_url = (row.get("sage_database_url") or "").strip()
         username = (row.get("sage_database_user") or "").strip()
 
+        raw_last_postgl_auto_idx = str(
+            row.get("last_postgl_auto_idx") or ""
+        ).strip()
+
+        if raw_last_postgl_auto_idx:
+            try:
+                last_postgl_auto_idx = int(raw_last_postgl_auto_idx)
+            except (TypeError, ValueError) as exc:
+                raise SageSyncConfigurationError(
+                    "Last POSTGL AutoIdx must contain a whole number for "
+                    f"Company '{row_company or 'Unspecified Company'}'."
+                ) from exc
+
+            if last_postgl_auto_idx < 0:
+                raise SageSyncConfigurationError(
+                    "Last POSTGL AutoIdx cannot be negative for "
+                    f"Company '{row_company or 'Unspecified Company'}'."
+                )
+        else:
+            last_postgl_auto_idx = 0
+
         missing_fields: list[str] = []
 
         if not row_company:
@@ -691,6 +1104,7 @@ def _get_validated_database_settings(
                 username=username,
                 password=password,
                 row_name=row_name,
+                last_postgl_auto_idx=last_postgl_auto_idx,
             )
         )
 

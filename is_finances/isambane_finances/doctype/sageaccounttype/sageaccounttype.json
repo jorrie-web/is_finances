@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "{sage_account_type}",
+ "creation": "2026-08-17 11:54:20.663529",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sage_account_type",
+  "sage_accounttype_decsription",
+  "report_dimension",
+  "sort_order"
+ ],
+ "fields": [
+  {
+   "fieldname": "sage_account_type",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Account Type Code",
+   "length": 11,
+   "reqd": 1
+  },
+  {
+   "fieldname": "sage_accounttype_decsription",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Account Type Description",
+   "length": 50,
+   "reqd": 1
+  },
+  {
+   "fieldname": "report_dimension",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Report Dimension",
+   "options": "BS-Non Current Assets\nBS-Current Assets\nBS-Equity\nBS-Non Current  liabilities\nBS-Current Liabilities\nIS-Revenue\nIS-Other Income\nIS-Cost of Sales\nIS-Other Expenditure",
+   "reqd": 1
+  },
+  {
+   "description": "Sort Order within Report Dimension",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sort Order",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-17 15:04:28.415929",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "SageAccountType",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

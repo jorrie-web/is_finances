@@ -1,0 +1,205 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
+ "allow_rename": 1,
+ "creation": "2026-08-23 11:01:11.286576",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_w0wj",
+  "forecast_scenario",
+  "company",
+  "forecast_period",
+  "financial_year",
+  "cost_center",
+  "account",
+  "account_number",
+  "account_name",
+  "sage_account_type",
+  "custom_report_dimension",
+  "custom_forecast_enabled",
+  "forecast_method",
+  "ebtda_treatment",
+  "forecast_drivers_section",
+  "volume",
+  "volume_uom",
+  "price_per_unit",
+  "forecast_amount",
+  "cost_center_number",
+  "input_source",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_w0wj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "forecast_scenario",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Forecast Scenario",
+   "options": "IS Forecast Scenario",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "forecast_period",
+   "fieldtype": "Date",
+   "label": "Forecast Period",
+   "reqd": 1
+  },
+  {
+   "fieldname": "financial_year",
+   "fieldtype": "Data",
+   "label": "Financial Year",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "reqd": 1
+  },
+  {
+   "fieldname": "account",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "account.account_number",
+   "fieldname": "account_number",
+   "fieldtype": "Data",
+   "label": "Account Number",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "account.account_name",
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "label": "Account Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "account.custom_sage_account_type",
+   "fieldname": "sage_account_type",
+   "fieldtype": "Data",
+   "label": "Sage Account Type",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "account.custom_report_dimension",
+   "fieldname": "custom_report_dimension",
+   "fieldtype": "Data",
+   "label": "Report Dimension",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fetch_from": "account.custom_forecast_enabled",
+   "fieldname": "custom_forecast_enabled",
+   "fieldtype": "Check",
+   "label": "Forecast Enabled",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "account.custom_forecast_method",
+   "fieldname": "forecast_method",
+   "fieldtype": "Data",
+   "label": "Forecast Method",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "account.custom_ebitda_treatment",
+   "fieldname": "ebtda_treatment",
+   "fieldtype": "Data",
+   "label": "EBITDA Treatment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "forecast_drivers_section",
+   "fieldtype": "Section Break",
+   "label": "Forecast Drivers"
+  },
+  {
+   "fieldname": "volume",
+   "fieldtype": "Float",
+   "label": "Volume",
+   "precision": "2"
+  },
+  {
+   "fetch_from": "account.custom_default_forecast_uom",
+   "fieldname": "volume_uom",
+   "fieldtype": "Link",
+   "label": "Volume UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "price_per_unit",
+   "fieldtype": "Currency",
+   "label": "Price Per Unit",
+   "precision": "4"
+  },
+  {
+   "fieldname": "forecast_amount",
+   "fieldtype": "Currency",
+   "label": "Forecast Amount",
+   "precision": "2"
+  },
+  {
+   "fetch_from": "cost_center.cost_center_number",
+   "fieldname": "cost_center_number",
+   "fieldtype": "Data",
+   "label": "Cost Center Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "input_source",
+   "fieldtype": "Select",
+   "label": "Input Source",
+   "options": "Manual\nVolume x Price\nCopied Forward\nCopied Previous FY\nEscalated\nImported"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-24 10:14:31.251186",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Forecast Entry",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -10,7 +10,8 @@
   "company",
   "sage_database_url",
   "sage_database_user",
-  "sage_database_password"
+  "sage_database_password",
+  "last_postgl_auto_idx"
  ],
  "fields": [
   {
@@ -43,13 +44,20 @@
    "in_list_view": 1,
    "label": "Sage Database Password",
    "reqd": 1
+  },
+  {
+   "fieldname": "last_postgl_auto_idx",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Last POSTGL AutoIdx",
+   "length": 20
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-07 09:44:41.317138",
+ "modified": "2026-08-17 10:57:26.766267",
  "modified_by": "Administrator",
  "module": "Isambane Finances",
  "name": "IS Finance Setup Table",

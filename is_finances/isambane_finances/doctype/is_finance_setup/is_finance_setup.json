@@ -7,7 +7,8 @@
  "engine": "InnoDB",
  "field_order": [
   "connect_to_sage_database",
-  "database_connections"
+  "database_connections",
+  "postgl_sync_record_limit"
  ],
  "fields": [
   {
@@ -23,13 +24,20 @@
    "label": "Sage Database Connections",
    "mandatory_depends_on": "eval:doc.connect_to_sage_database == 1",
    "options": "IS Finance Setup Table"
+  },
+  {
+   "default": "100",
+   "description": "Maximum new POSTGL records per company per sync. Set 0 for unlimited",
+   "fieldname": "postgl_sync_record_limit",
+   "fieldtype": "Int",
+   "label": "POSTGL Sync Record Limit"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-07 09:46:54.272514",
+ "modified": "2026-08-17 08:39:06.999901",
  "modified_by": "Administrator",
  "module": "Isambane Finances",
  "name": "IS Finance Setup",
