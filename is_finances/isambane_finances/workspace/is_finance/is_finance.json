@@ -1,0 +1,294 @@
+{
+ "app": "is_finances",
+ "charts": [],
+ "content": "[{\"id\": \"isf-sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"isf-h\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Isambane Finances</b></span>\", \"col\": 12}}, {\"id\": \"isf-p\", \"type\": \"paragraph\", \"data\": {\"text\": \"<span class=\\\"text-muted\\\">Sage GL import &amp; reconciliation, budgeting, forecasting, and financial reporting for Isambane Mining.</span>\", \"col\": 12}}, {\"id\": \"isf-c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Dashboard\", \"col\": 4}}, {\"id\": \"isf-c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Setup\", \"col\": 4}}, {\"id\": \"isf-c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Budgeting\", \"col\": 4}}, {\"id\": \"isf-c4\", \"type\": \"card\", \"data\": {\"card_name\": \"GL Import & Reconciliation\", \"col\": 4}}, {\"id\": \"isf-c5\", \"type\": \"card\", \"data\": {\"card_name\": \"Forecasting\", \"col\": 4}}, {\"id\": \"isf-c6\", \"type\": \"card\", \"data\": {\"card_name\": \"Payroll\", \"col\": 4}}, {\"id\": \"isf-c7\", \"type\": \"card\", \"data\": {\"card_name\": \"Reports\", \"col\": 4}}]",
+ "creation": "2026-08-26 11:36:37.049741",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "hide_custom": 0,
+ "icon": "dollar-sign",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "IS Finance",
+ "link_type": "DocType",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Dashboard",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Isambane Financial Dashboard",
+   "link_count": 0,
+   "link_to": "is-fin-dashboard",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Finance Setup",
+   "link_count": 0,
+   "link_to": "IS Finance Setup",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sage Account Type",
+   "link_count": 0,
+   "link_to": "SageAccountType",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Match Key Issue Type",
+   "link_count": 0,
+   "link_to": "IS Match Key Issue Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Recon Category",
+   "link_count": 0,
+   "link_to": "IS Recon Category",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Supplier Statement Parser",
+   "link_count": 0,
+   "link_to": "IS Supplier Statement Parser",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Budgeting",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Budget Plan",
+   "link_count": 0,
+   "link_to": "Budget Plan",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Budget Rates",
+   "link_count": 0,
+   "link_to": "Budget Rates",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Budget Benchmark",
+   "link_count": 0,
+   "link_to": "Budget Benchmark",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "GL Import & Reconciliation",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "GL Historical Import",
+   "link_count": 0,
+   "link_to": "GL Historical Import",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Creditors Recon",
+   "link_count": 0,
+   "link_to": "IS Creditors Recon",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sage POSTGL Entry",
+   "link_count": 0,
+   "link_to": "Sage POSTGL Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sage Budget Entry",
+   "link_count": 0,
+   "link_to": "Sage Budget Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Forecasting",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Forecast Scenario",
+   "link_count": 0,
+   "link_to": "IS Forecast Scenario",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "IS Forecast Entry",
+   "link_count": 0,
+   "link_to": "IS Forecast Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payroll",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payroll Sheet",
+   "link_count": 0,
+   "link_to": "Payroll Sheet",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Account-Item Report",
+   "link_count": 0,
+   "link_to": "Account-Item Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Annual IS",
+   "link_count": 0,
+   "link_to": "Annual IS",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Budget Consolidation",
+   "link_count": 0,
+   "link_to": "Budget Consolidation",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Sage IS",
+   "link_count": 0,
+   "link_to": "Sage IS",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-26 11:36:37.049741",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "IS Finance",
+ "number_cards": [],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [],
+ "title": "IS Finance",
+ "type": "Workspace"
+}

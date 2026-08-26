@@ -1,0 +1,368 @@
+{
+ "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_rename": 1,
+ "creation": "2026-04-10 10:24:35.819688",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "surname",
+  "coy",
+  "employee_name",
+  "id_number",
+  "occupation",
+  "normal_time_hours",
+  "total_calculated_hours",
+  "a_leave_hours",
+  "s_leave_hours",
+  "f_leave_hours",
+  "overtime_1_5_after_195",
+  "overtime_2_0",
+  "wpph_2_0",
+  "d16_wed",
+  "d17_thu",
+  "d18_fri_pph",
+  "d18_fri_wpph",
+  "d19_sat",
+  "d20_sun_pph",
+  "d21_mon_pph",
+  "d21_mon_wpph",
+  "d22_tue",
+  "d23_wed",
+  "d24_thu",
+  "d25_fri",
+  "d26_sat",
+  "d27_sun_pph",
+  "d28_mon_pph",
+  "d28_mon_wpph",
+  "d29_tue",
+  "d30_wed",
+  "d1_thu_pph",
+  "d1_thu_wpph",
+  "d2_fri",
+  "d3_sat",
+  "d4_sun_pph",
+  "d5_mon",
+  "d6_tue",
+  "d7_wed",
+  "d8_thu",
+  "d9_fri",
+  "d10_sat",
+  "d11_sun_pph",
+  "d12_mon",
+  "d13_tue",
+  "d14_wed",
+  "d15_thu",
+  "a_leave_12_count",
+  "a_leave_9_count",
+  "s_leave_12_count",
+  "s_leave_9_count",
+  "f_leave_12_count",
+  "f_leave_9_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "surname",
+   "fieldtype": "Data",
+   "label": "Surname"
+  },
+  {
+   "fieldname": "coy",
+   "fieldtype": "Data",
+   "label": "Coy"
+  },
+  {
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Name"
+  },
+  {
+   "fieldname": "id_number",
+   "fieldtype": "Data",
+   "label": "ID"
+  },
+  {
+   "fieldname": "occupation",
+   "fieldtype": "Data",
+   "label": "Occupation"
+  },
+  {
+   "fieldname": "normal_time_hours",
+   "fieldtype": "Float",
+   "label": "N/T",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_calculated_hours",
+   "fieldtype": "Float",
+   "label": "Total Calculated Hours",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "a_leave_hours",
+   "fieldtype": "Float",
+   "label": "A/Leave",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "s_leave_hours",
+   "fieldtype": "Float",
+   "label": "S/Leave",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "f_leave_hours",
+   "fieldtype": "Float",
+   "label": "F/Leave",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overtime_1_5_after_195",
+   "fieldtype": "Float",
+   "label": "O/Time 1.5 After 195",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overtime_2_0",
+   "fieldtype": "Float",
+   "label": "O/Time 2.0",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "wpph_2_0",
+   "fieldtype": "Float",
+   "label": "WPPH 2.0",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "d16_wed",
+   "fieldtype": "Data",
+   "label": "16 Wed"
+  },
+  {
+   "fieldname": "d17_thu",
+   "fieldtype": "Data",
+   "label": "17 Thu"
+  },
+  {
+   "fieldname": "d18_fri_pph",
+   "fieldtype": "Data",
+   "label": "18 Fri PPH"
+  },
+  {
+   "fieldname": "d18_fri_wpph",
+   "fieldtype": "Data",
+   "label": "18 Fri WPPH"
+  },
+  {
+   "fieldname": "d19_sat",
+   "fieldtype": "Data",
+   "label": "19 Sat"
+  },
+  {
+   "fieldname": "d20_sun_pph",
+   "fieldtype": "Data",
+   "label": "20 Sun PPH"
+  },
+  {
+   "fieldname": "d21_mon_pph",
+   "fieldtype": "Data",
+   "label": "21 Mon PPH"
+  },
+  {
+   "fieldname": "d21_mon_wpph",
+   "fieldtype": "Data",
+   "label": "21 Mon WPPH"
+  },
+  {
+   "fieldname": "d22_tue",
+   "fieldtype": "Data",
+   "label": "22 Tue"
+  },
+  {
+   "fieldname": "d23_wed",
+   "fieldtype": "Data",
+   "label": "23 Wed"
+  },
+  {
+   "fieldname": "d24_thu",
+   "fieldtype": "Data",
+   "label": "24 Thu"
+  },
+  {
+   "fieldname": "d25_fri",
+   "fieldtype": "Data",
+   "label": "25 Fri"
+  },
+  {
+   "fieldname": "d26_sat",
+   "fieldtype": "Data",
+   "label": "26 Sat"
+  },
+  {
+   "fieldname": "d27_sun_pph",
+   "fieldtype": "Data",
+   "label": "27 Sun PPH"
+  },
+  {
+   "fieldname": "d28_mon_pph",
+   "fieldtype": "Data",
+   "label": "28 Mon PPH"
+  },
+  {
+   "fieldname": "d28_mon_wpph",
+   "fieldtype": "Data",
+   "label": "28 Mon WPPH"
+  },
+  {
+   "fieldname": "d29_tue",
+   "fieldtype": "Data",
+   "label": "29 Tue"
+  },
+  {
+   "fieldname": "d30_wed",
+   "fieldtype": "Data",
+   "label": "30 Wed"
+  },
+  {
+   "fieldname": "d1_thu_pph",
+   "fieldtype": "Data",
+   "label": "1 Thu PPH"
+  },
+  {
+   "fieldname": "d1_thu_wpph",
+   "fieldtype": "Data",
+   "label": "1 Thu WPPH"
+  },
+  {
+   "fieldname": "d2_fri",
+   "fieldtype": "Data",
+   "label": "2 Fri"
+  },
+  {
+   "fieldname": "d3_sat",
+   "fieldtype": "Data",
+   "label": "3 Sat"
+  },
+  {
+   "fieldname": "d4_sun_pph",
+   "fieldtype": "Data",
+   "label": "4 Sun PPH"
+  },
+  {
+   "fieldname": "d5_mon",
+   "fieldtype": "Data",
+   "label": "5 Mon"
+  },
+  {
+   "fieldname": "d6_tue",
+   "fieldtype": "Data",
+   "label": "6 Tue"
+  },
+  {
+   "fieldname": "d7_wed",
+   "fieldtype": "Data",
+   "label": "7 Wed"
+  },
+  {
+   "fieldname": "d8_thu",
+   "fieldtype": "Data",
+   "label": "8 Thu"
+  },
+  {
+   "fieldname": "d9_fri",
+   "fieldtype": "Data",
+   "label": "9 Fri"
+  },
+  {
+   "fieldname": "d10_sat",
+   "fieldtype": "Data",
+   "label": "10 Sat"
+  },
+  {
+   "fieldname": "d11_sun_pph",
+   "fieldtype": "Data",
+   "label": "11 Sun PPH"
+  },
+  {
+   "fieldname": "d12_mon",
+   "fieldtype": "Data",
+   "label": "12 Mon"
+  },
+  {
+   "fieldname": "d13_tue",
+   "fieldtype": "Data",
+   "label": "13 Tue"
+  },
+  {
+   "fieldname": "d14_wed",
+   "fieldtype": "Data",
+   "label": "14 Wed"
+  },
+  {
+   "fieldname": "d15_thu",
+   "fieldtype": "Data",
+   "label": "15 Thu"
+  },
+  {
+   "fieldname": "a_leave_12_count",
+   "fieldtype": "Float",
+   "label": "A/Leave 12 Hrs",
+   "precision": "2"
+  },
+  {
+   "fieldname": "a_leave_9_count",
+   "fieldtype": "Float",
+   "label": "A/Leave 9 Hrs",
+   "precision": "2"
+  },
+  {
+   "fieldname": "s_leave_12_count",
+   "fieldtype": "Float",
+   "label": "S/Leave 12 Hrs",
+   "precision": "2"
+  },
+  {
+   "fieldname": "s_leave_9_count",
+   "fieldtype": "Float",
+   "label": "S/Leave 9 Hrs",
+   "precision": "2"
+  },
+  {
+   "fieldname": "f_leave_12_count",
+   "fieldtype": "Float",
+   "label": "F/Leave 12 Hrs",
+   "precision": "2"
+  },
+  {
+   "fieldname": "f_leave_9_count",
+   "fieldtype": "Float",
+   "label": "F/Leave 9 Hrs",
+   "precision": "2"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-26 11:44:43.732233",
+ "modified_by": "Administrator",
+ "module": "Isambane Finances",
+ "name": "Payroll Sheet Employee",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
