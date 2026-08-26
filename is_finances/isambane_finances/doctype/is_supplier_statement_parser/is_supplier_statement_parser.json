@@ -1,5 +1,7 @@
 {
  "actions": [],
+ "allow_bulk_edit": 1,
+ "allow_import": 1,
  "allow_rename": 1,
  "creation": "2026-03-05 11:37:57.353577",
  "doctype": "DocType",
@@ -179,7 +181,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-10 13:12:01.581891",
+ "modified": "2026-08-26 12:08:32.424965",
  "modified_by": "Administrator",
  "module": "Isambane Finances",
  "name": "IS Supplier Statement Parser",
@@ -202,5 +204,6 @@
  "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1
 }
