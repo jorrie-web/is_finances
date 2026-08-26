@@ -11,6 +11,7 @@
   "month",
   "year",
   "occupation",
+  "employee_rows",
   "payroll_calendar_html"
  ],
  "fields": [
@@ -48,12 +49,19 @@
    "fieldtype": "HTML",
    "label": "Payroll Calendar",
    "read_only": 1
+  },
+  {
+   "fieldname": "employee_rows",
+   "fieldtype": "Table",
+   "label": "Employees",
+   "options": "Payroll Sheet Employee",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-26 11:44:41.521310",
+ "modified": "2026-08-26 11:53:03.251965",
  "modified_by": "Administrator",
  "module": "Isambane Finances",
  "name": "Payroll Sheet",
