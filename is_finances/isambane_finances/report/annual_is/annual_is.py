@@ -38,6 +38,8 @@ def execute(filters=None):
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_child_cost_centers(doctype, txt, searchfield, start, page_len, filters):
+	frappe.has_permission("Cost Center", "read", throw=True)
+
 	group = filters.get("cost_center_group")
 	company = filters.get("company")
 

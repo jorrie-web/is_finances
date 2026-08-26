@@ -29,3 +29,18 @@ scheduler_events = {
 		"is_finances.controllers.sage_sync.run_daily_sage_sync",
 	],
 }
+
+fixtures = [
+	{"dt": "Custom Field", "filters": [["name", "in", [
+		"Item-isf_is_bcm",
+		"Item-isf_budget_rate",
+		"Location-isf_linked_cost_center",
+		"Designation-isf_monthly_ctc",
+		"Account-isf_default_forecast_uom",
+		"Account-isf_sage_account_type",
+		"Account-isf_report_dimension",
+		"Account-isf_forecast_enabled",
+		"Account-isf_ebitda_treatment",
+		"Account-isf_forecast_method",
+	]]]},
+]

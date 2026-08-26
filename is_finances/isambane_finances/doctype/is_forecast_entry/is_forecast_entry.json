@@ -167,7 +167,7 @@
    "fieldname": "input_source",
    "fieldtype": "Select",
    "label": "Input Source",
-   "options": "Manual\nVolume x Price\nCopied Forward\nCopied Previous FY\nEscalated\nImported"
+   "options": "Manual\nVolume x Price\nLast 3M Actual Avg\nCopied Forward\nCopied Previous FY\nEscalated\nImported"
   },
   {
    "fieldname": "comments",

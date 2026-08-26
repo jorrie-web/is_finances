@@ -55,6 +55,8 @@ def _first_non_empty_value(doc, fieldnames):
 
 @frappe.whitelist()
 def get_site_employee_rows(site, occupation=None):
+    frappe.has_permission("Employee", "read", throw=True)
+
     if not site:
         return []
 
@@ -119,7 +121,9 @@ def get_site_employee_rows(site, occupation=None):
         if fieldname != "name" and employee_meta.has_field(fieldname):
             fields.append(fieldname)
 
-    employees = frappe.get_all(
+    # get_list (not get_all) so row-level/user permissions on Employee are respected,
+    # not just the doctype-level check above.
+    employees = frappe.get_list(
         "Employee",
         filters=filters,
         fields=fields,

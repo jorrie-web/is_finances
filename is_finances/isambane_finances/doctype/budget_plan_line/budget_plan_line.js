@@ -5,7 +5,7 @@ frappe.ui.form.on("Budget Plan Line", {
 
     // Pull key fields from Item
     const it = await frappe.db.get_value("Item", row.item_code,
-      ["item_group", "stock_uom", "custom_budget_rate", "standard_rate", "custom_is_bcm"]);
+      ["item_group", "stock_uom", "isf_budget_rate", "standard_rate", "isf_is_bcm"]);
     const item = it?.message || {};
 
     if (item.item_group !== "Budget Items") {
@@ -27,14 +27,14 @@ frappe.ui.form.on("Budget Plan Line", {
       if (r?.message?.budget_rate) rate = flt(r.message.budget_rate);
     }
 
-    // 2️⃣ Fallback to item.custom_budget_rate / standard_rate
-    if (!rate) rate = flt(item.custom_budget_rate) || flt(item.standard_rate) || 0;
+    // 2️⃣ Fallback to item.isf_budget_rate / standard_rate
+    if (!rate) rate = flt(item.isf_budget_rate) || flt(item.standard_rate) || 0;
 
     if (!row.custom_budget_rate) frappe.model.set_value(cdt, cdn, "custom_budget_rate", rate);
     frappe.model.set_value(cdt, cdn, "amount", (flt(row.qty) || 0) * (flt(row.custom_budget_rate) || rate));
 
     // BCM guardrails
-    if (item.custom_is_bcm) {
+    if (item.isf_is_bcm) {
       frappe.model.set_value(cdt, cdn, "uom", "BCM");
       frappe.show_alert({ message: __("BCM item: UOM set to BCM."), indicator: "blue" });
       if (row.asset) frappe.model.set_value(cdt, cdn, "asset", null);
@@ -64,8 +64,8 @@ frappe.ui.form.on("Budget Plan Line", {
       return;
     }
 
-    const L = await frappe.db.get_value("Location", loc, ["custom_linked_cost_center"]);
-    const cc = L?.message?.custom_linked_cost_center;
+    const L = await frappe.db.get_value("Location", loc, ["isf_linked_cost_center"]);
+    const cc = L?.message?.isf_linked_cost_center;
     if (!cc) {
       frappe.msgprint(__("Location {0} has no Linked Cost Center set.", [loc]));
       return;

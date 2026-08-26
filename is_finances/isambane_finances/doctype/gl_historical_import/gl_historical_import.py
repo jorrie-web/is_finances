@@ -75,6 +75,7 @@ class GLHistoricalImport(Document):
 @frappe.whitelist()
 def preview_gl_historical_import(docname, selected_months=None):
     doc = frappe.get_doc("GL Historical Import", docname)
+    doc.check_permission("write")
     selected = _normalise_selected_months(selected_months, doc.import_year)
     parsed = _parse_excel_for_doc(doc, selected, import_rows=False)
     if parsed.get("control_difference_errors"):
@@ -99,6 +100,7 @@ def preview_gl_historical_import(docname, selected_months=None):
 @frappe.whitelist()
 def import_gl_historical(docname, selected_months=None, duplicate_action=None):
     doc = frappe.get_doc("GL Historical Import", docname)
+    doc.check_permission("write")
     selected = _normalise_selected_months(selected_months, doc.import_year)
 
     duplicates = _find_existing_company_month_imports(doc, selected)
@@ -184,6 +186,7 @@ def import_gl_historical(docname, selected_months=None, duplicate_action=None):
 @frappe.whitelist()
 def check_existing_company_month_data(docname, selected_months=None):
     doc = frappe.get_doc("GL Historical Import", docname)
+    doc.check_permission("read")
     selected = _normalise_selected_months(selected_months, doc.import_year)
     duplicates = _find_existing_company_month_imports(doc, selected)
     return {
@@ -196,6 +199,7 @@ def check_existing_company_month_data(docname, selected_months=None):
 @frappe.whitelist()
 def get_gl_historical_summary(docname):
     doc = frappe.get_doc("GL Historical Import", docname)
+    doc.check_permission("read")
     selected = _months_from_doc(doc)
 
     if not selected or not doc.excel_file:

@@ -29,17 +29,11 @@ EQUIPMENT_CATEGORIES = [
 
 
 def _is_bcm_item(item_code: str) -> bool:
-    """Safe BCM flag lookup.
-    - If Item.custom_is_bcm does not exist in DB, return False (treat as non-BCM).
-    """
+    """Return True if the given Item is flagged as a BCM item."""
     if not item_code:
         return False
 
-    # Avoid DB crash if the custom field isn't installed
-    if not frappe.db.has_column("Item", "custom_is_bcm"):
-        return False
-
-    return bool(frappe.db.get_value("Item", item_code, "custom_is_bcm"))
+    return bool(frappe.db.get_value("Item", item_code, "isf_is_bcm"))
 
 
 def rotate_months_to_fy_start(fiscal_year: str | None) -> list[str]:
@@ -67,7 +61,7 @@ def get_budget_rate(item_code, cost_center=None):
         ) or 0
 
     if not rate:
-        rate = frappe.db.get_value("Item", item_code, "custom_budget_rate") or 0
+        rate = frappe.db.get_value("Item", item_code, "isf_budget_rate") or 0
 
     return flt(rate)
 
@@ -138,9 +132,9 @@ class BudgetPlan(Document):
             if not loc:
                 frappe.throw(f"Asset {d.asset} has no Location set.")
 
-            mapped_cc = frappe.db.get_value("Location", loc, "custom_linked_cost_center")
+            mapped_cc = frappe.db.get_value("Location", loc, "isf_linked_cost_center")
             if not mapped_cc:
-                frappe.throw(f"Location {loc} has no Linked Cost Center (custom_linked_cost_center).")
+                frappe.throw(f"Location {loc} has no Linked Cost Center (isf_linked_cost_center).")
 
             line_cc = getattr(d, "cost_center", None)
 
@@ -604,6 +598,7 @@ class BudgetPlan(Document):
 
 @frappe.whitelist()
 def get_item_rate(item: str, cost_center: str | None = None):
+    frappe.has_permission("Budget Plan", "read", throw=True)
     return get_budget_rate(item, cost_center)
 
 
@@ -612,6 +607,8 @@ def get_budget_rates_for_cost_center(fiscal_year: str, company: str, cost_center
     """Returns list of {item, label, budget_rate} for Budget Rates doc matching fiscal_year+company,
     filtered to the given cost_center. Label format matches Budget Rates UI.
     """
+    frappe.has_permission("Budget Plan", "read", throw=True)
+
     if not fiscal_year or not company or not cost_center:
         frappe.throw("Fiscal Year, Company and Cost Center are required.")
 
@@ -660,6 +657,8 @@ def get_budget_rates_for_cost_center(fiscal_year: str, company: str, cost_center
 @frappe.whitelist()
 def sync_budget_rates_to_item_budget_rate(fiscal_year: str, company: str, cost_center: str):
     """Copy Budget Rates.item_budget_rates rows into Item Budget Rate for the given cost center."""
+    frappe.has_permission("Budget Plan", "write", throw=True)
+
     if not fiscal_year or not company or not cost_center:
         frappe.throw("Fiscal Year, Company and Cost Center are required.")
 
@@ -738,6 +737,7 @@ def get_item_month_rates(docname: str, item: str):
         frappe.throw("docname and item are required.")
 
     doc = frappe.get_doc("Budget Plan", docname)
+    doc.check_permission("read")
     months = rotate_months_to_fy_start(doc.fiscal_year)
 
     # Index existing lines for this item by month
@@ -764,6 +764,7 @@ def get_item_month_rates(docname: str, item: str):
 @frappe.whitelist()
 def get_budget_plan_summary_html(docname: str):
     doc = frappe.get_doc("Budget Plan", docname)
+    doc.check_permission("read")
     # ensure line amounts are up to date
     doc.compute_line_amounts()
     doc.render_summary_html()
@@ -778,6 +779,8 @@ def get_asset_counts_by_category(asset_categories, company=None, location=None):
         company: optional Company filter (if Asset has company column).
         location: optional Location filter (if Asset has location column).
     """
+    frappe.has_permission("Asset", "read", throw=True)
+
     if isinstance(asset_categories, str):
         # allow JSON string from JS
         asset_categories = frappe.parse_json(asset_categories)
@@ -828,6 +831,7 @@ def get_equipment_info_payload(docname: str):
         frappe.throw("docname is required")
 
     doc = frappe.get_doc("Budget Plan", docname)
+    doc.check_permission("read")
 
     # Suggest location from Site Code (by cost center) if doc is blank
     suggested_loc = None
@@ -889,6 +893,8 @@ def get_site_code_location(cost_center: str):
     """Return Site Code (name, location) for a given Cost Center.
     Prefers submitted Site Code (docstatus=1), falls back to draft if none exist.
     """
+    frappe.has_permission("Budget Plan", "read", throw=True)
+
     if not cost_center:
         return None
 

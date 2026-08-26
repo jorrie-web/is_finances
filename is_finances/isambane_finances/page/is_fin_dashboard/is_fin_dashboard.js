@@ -19,9 +19,19 @@ class IsFinDashboard {
 		this.transaction_cache = new Map();
 		this.summary_drilldown_cache = new Map();
 		this.last_runtime = null;
+		this.active_tab = 'actual';
+		this.forecast_data = null;
+		this.forecast_scenario_map = {};
+		this.forecast_cost_centre_map = {};
+		this.forecast_state = new Map();
+		this.forecast_line_map = new Map();
+		this.forecast_dirty = new Set();
+		this.forecast_loaded_once = false;
+		this.forecast_open_sections = new Set(['IS-Revenue']);
 		this._inject_styles();
 		this._build_filters();
 		this._build_layout();
+		this._bind_tabs();
 		this._load_financial_years()
 			.then(() => this._load_cost_centres())
 			.then(() => this.refresh());
@@ -114,22 +124,92 @@ class IsFinDashboard {
 	_build_layout() {
 		this.$root = $(
 			`<div class="is-fin-dashboard">
-				<div class="ifd-context"></div>
-				<div class="ifd-kpis"></div>
-				<div class="ifd-charts">
-					<div class="ifd-panel"><div class="ifd-panel-title">Revenue by Month</div><div class="ifd-subtitle">R'million</div><div id="ifd-revenue-chart" class="ifd-chart"></div></div>
-					<div class="ifd-panel"><div class="ifd-panel-title">Expenses by Month</div><div class="ifd-subtitle">Cost of Sales + Other Expenditure | R'million</div><div id="ifd-expenses-chart" class="ifd-chart"></div></div>
-					<div class="ifd-panel"><div class="ifd-panel-title">Profit / (Loss) by Month</div><div class="ifd-subtitle">R'million</div><div id="ifd-profit-chart" class="ifd-chart"></div></div>
-					<div class="ifd-panel"><div class="ifd-panel-title">EBITDA by Month</div><div class="ifd-subtitle">Profit + interest paid + depreciation - interest received | R'million</div><div id="ifd-ebitda-chart" class="ifd-chart"></div></div>
+				<div class="ifd-tabs" role="tablist">
+					<button type="button" class="ifd-tab-button active" data-tab="actual">Income Statement</button>
+					<button type="button" class="ifd-tab-button" data-tab="forecast">Forecast</button>
 				</div>
-				<div class="ifd-panel ifd-statement-panel">
-					<div class="ifd-panel-header">
-						<div><div class="ifd-panel-title">Income Statement</div><div class="ifd-subtitle">Open a section for monthly account detail; click an account for further drilldown</div></div>
+
+				<div class="ifd-tab-pane" data-tab-pane="actual">
+					<div class="ifd-context"></div>
+					<div class="ifd-kpis"></div>
+					<div class="ifd-charts">
+						<div class="ifd-panel"><div class="ifd-panel-title">Revenue by Month</div><div class="ifd-subtitle">R'million</div><div id="ifd-revenue-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">Expenses by Month</div><div class="ifd-subtitle">Cost of Sales + Other Expenditure | R'million</div><div id="ifd-expenses-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">Profit / (Loss) by Month</div><div class="ifd-subtitle">R'million</div><div id="ifd-profit-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">EBITDA by Month</div><div class="ifd-subtitle">Profit + interest paid + depreciation - interest received | R'million</div><div id="ifd-ebitda-chart" class="ifd-chart"></div></div>
 					</div>
-					<div class="ifd-table-wrap"></div>
+					<div class="ifd-panel ifd-statement-panel">
+						<div class="ifd-panel-header">
+							<div><div class="ifd-panel-title">Income Statement</div><div class="ifd-subtitle">Open a section for monthly account detail; click an account for further drilldown</div></div>
+						</div>
+						<div class="ifd-table-wrap"></div>
+					</div>
+				</div>
+
+				<div class="ifd-tab-pane" data-tab-pane="forecast" style="display:none;">
+					<div class="ifd-forecast-controls">
+						<div class="ifd-control-group"><label>Forecast Scenario</label><select id="ifd-forecast-scenario" class="form-control"></select></div>
+						<div class="ifd-control-group"><label>Forecast Cost Centre</label><select id="ifd-forecast-cost-centre" class="form-control"></select></div>
+						<div class="ifd-control-group"><label>Financial Year</label><select id="ifd-forecast-fy" class="form-control"></select></div>
+						<div class="ifd-control-group"><label>3M Actual Base Site</label><select id="ifd-forecast-actual-source" class="form-control"></select></div>
+						<div class="ifd-forecast-actions">
+							<button type="button" class="btn btn-default" id="ifd-edit-forecast-scenario">Edit Scenario</button>
+							<button type="button" class="btn btn-default" id="ifd-seed-expenses">Fill Expenses from 3M Avg</button>
+							<button type="button" class="btn btn-default" id="ifd-refresh-forecast">Refresh</button>
+							<button type="button" class="btn btn-primary" id="ifd-save-forecast">Save Changes</button>
+						</div>
+					</div>
+					<div class="ifd-forecast-context"></div>
+					<div class="ifd-forecast-kpis"></div>
+					<div class="ifd-panel ifd-statement-panel ifd-forecast-panel">
+						<div class="ifd-panel-header">
+							<div><div class="ifd-panel-title">Forecast Income Statement</div><div class="ifd-subtitle">March-February is shown as one Actual + Forecast view: A = actual month and F = forecast month. Revenue uses Volume × Price; future expense months can be seeded from a selected site's last 3-month actual average and remain editable.</div></div>
+						</div>
+						<div class="ifd-forecast-table-wrap"></div>
+					</div>
+					<div class="ifd-charts ifd-forecast-charts">
+						<div class="ifd-panel"><div class="ifd-panel-title">Revenue Actual + Forecast</div><div class="ifd-subtitle">R'million</div><div id="ifd-forecast-revenue-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">Expenses Actual + Forecast</div><div class="ifd-subtitle">R'million</div><div id="ifd-forecast-expenses-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">Profit / (Loss) Actual + Forecast</div><div class="ifd-subtitle">R'million</div><div id="ifd-forecast-profit-chart" class="ifd-chart"></div></div>
+						<div class="ifd-panel"><div class="ifd-panel-title">EBITDA Actual + Forecast</div><div class="ifd-subtitle">R'million</div><div id="ifd-forecast-ebitda-chart" class="ifd-chart"></div></div>
+					</div>
 				</div>
 			</div>`
 		).appendTo(this.page.main);
+	}
+
+	_bind_tabs() {
+		this.$root.find('.ifd-tab-button').on('click', e => this._switch_tab($(e.currentTarget).data('tab')));
+		this.$root.find('#ifd-refresh-forecast').on('click', () => this._load_forecast_data());
+		this.$root.find('#ifd-save-forecast').on('click', () => this._save_forecast());
+		this.$root.find('#ifd-edit-forecast-scenario').on('click', () => this._edit_forecast_scenario());
+		this.$root.find('#ifd-seed-expenses').on('click', () => this._seed_expenses_from_actual_average());
+		this.$root.find('#ifd-forecast-scenario').on('change', () => this._on_forecast_scenario_change());
+		this.$root.find('#ifd-forecast-cost-centre').on('change', () => this._on_forecast_cost_centre_change());
+		this.$root.find('#ifd-forecast-fy').on('change', () => this._load_forecast_data());
+	}
+
+	async _switch_tab(tab) {
+		this.active_tab = tab === 'forecast' ? 'forecast' : 'actual';
+		this.$root.find('.ifd-tab-button').removeClass('active');
+		this.$root.find(`.ifd-tab-button[data-tab="${this.active_tab}"]`).addClass('active');
+		this.$root.find('.ifd-tab-pane').hide();
+		this.$root.find(`.ifd-tab-pane[data-tab-pane="${this.active_tab}"]`).show();
+
+		const showActualToolbar = this.active_tab === 'actual';
+		[this.financial_year, this.from_date, this.to_date, this.cost_centre].forEach(field => {
+			if (field && field.$wrapper) field.$wrapper.toggle(showActualToolbar);
+		});
+
+		if (showActualToolbar) {
+			this.page.set_primary_action(__('Run Income Statement'), () => this.refresh(), 'play');
+			return;
+		}
+
+		this.page.set_primary_action(__('Save Forecast'), () => this._save_forecast(), 'save');
+		if (!this.forecast_loaded_once) {
+			await this._load_forecast_scenarios();
+		}
 	}
 
 	async _load_cost_centres() {
@@ -574,6 +654,492 @@ class IsFinDashboard {
 		});
 	}
 
+
+	async _load_forecast_scenarios() {
+		this.$root.find('.ifd-forecast-context').html('<div class="ifd-loading">Loading forecast scenarios...</div>');
+		const r = await frappe.call({
+			method: `${this.method_root}.get_forecast_scenarios`,
+			freeze: false
+		});
+		const scenarios = (r.message && r.message.scenarios) || [];
+		this.forecast_scenario_map = {};
+		scenarios.forEach(row => { this.forecast_scenario_map[row.name] = row; });
+
+		const $select = this.$root.find('#ifd-forecast-scenario');
+		$select.html(scenarios.map(row => `<option value="${this._escape_attr(row.name)}">${this._escape(row.scenario_name)} · ${this._escape(row.status || '')}</option>`).join(''));
+		if (!scenarios.length) {
+			this.$root.find('.ifd-forecast-context').html('<div class="ifd-empty">No active IS Forecast Scenarios found.</div>');
+			this.$root.find('#ifd-save-forecast').prop('disabled', true);
+			return;
+		}
+
+		const preferred = scenarios.find(row => row.status === 'Draft') || scenarios[0];
+		$select.val(preferred.name);
+		this.forecast_loaded_once = true;
+		await this._on_forecast_scenario_change();
+	}
+
+	async _on_forecast_scenario_change() {
+		const scenarioName = this.$root.find('#ifd-forecast-scenario').val();
+		const scenario = this.forecast_scenario_map[scenarioName];
+		if (!scenario) return;
+
+		const ccResponse = await frappe.call({
+			method: `${this.method_root}.get_forecast_cost_centres`,
+			args: { forecast_scenario: scenarioName },
+			freeze: false
+		});
+		const costCentres = (ccResponse.message && ccResponse.message.cost_centres) || [];
+		this.forecast_cost_centre_map = {};
+		costCentres.forEach(row => { this.forecast_cost_centre_map[row.name] = row; });
+		const costCentreOptions = costCentres.map(row => `<option value="${this._escape_attr(row.name)}">${this._escape(row.label)}</option>`).join('');
+		this.$root.find('#ifd-forecast-cost-centre').html(costCentreOptions);
+		this.$root.find('#ifd-forecast-actual-source').html(costCentreOptions);
+
+		const years = scenario.financial_years || [];
+		this.$root.find('#ifd-forecast-fy').html(years.map(year => `<option value="${this._escape_attr(year)}">${this._escape(year)}</option>`).join(''));
+		const actualCurrent = this.financial_year ? this.financial_year.get_value() : null;
+		this.$root.find('#ifd-forecast-fy').val(years.includes(actualCurrent) ? actualCurrent : years[0]);
+		this.$root.find('#ifd-forecast-cost-centre').val('__all__');
+		this.$root.find('#ifd-forecast-actual-source').val('__all__');
+		await this._load_forecast_data();
+	}
+
+	async _on_forecast_cost_centre_change() {
+		const target = this.$root.find('#ifd-forecast-cost-centre').val();
+		if (target && target !== '__all__') {
+			this.$root.find('#ifd-forecast-actual-source').val(target);
+		}
+		await this._load_forecast_data();
+	}
+
+	_edit_forecast_scenario() {
+		const scenario = this.$root.find('#ifd-forecast-scenario').val();
+		if (!scenario) return;
+		frappe.set_route('Form', 'IS Forecast Scenario', scenario);
+	}
+
+	async _seed_expenses_from_actual_average() {
+		const forecast_scenario = this.$root.find('#ifd-forecast-scenario').val();
+		const target_cost_center = this.$root.find('#ifd-forecast-cost-centre').val();
+		const source_cost_center = this.$root.find('#ifd-forecast-actual-source').val();
+		const scenario = this.forecast_scenario_map[forecast_scenario];
+		if (!forecast_scenario || !target_cost_center || !source_cost_center) return;
+		if (!scenario || scenario.status !== 'Draft') {
+			frappe.msgprint(__('Only Draft Forecast Scenarios can be populated.'));
+			return;
+		}
+		if (target_cost_center === '__all__') {
+			frappe.msgprint(__('Select an individual Forecast Cost Centre first.'));
+			return;
+		}
+
+		const targetLabel = this.forecast_cost_centre_map[target_cost_center]?.label || target_cost_center;
+		const sourceLabel = this.forecast_cost_centre_map[source_cost_center]?.label || source_cost_center;
+		frappe.confirm(
+			__(`Populate ALL expense forecast months in ${targetLabel} from the last 3-month actual average of ${sourceLabel}? Existing expense forecast amounts across the full scenario will be overwritten, but remain editable afterwards.`),
+			async () => {
+				const r = await frappe.call({
+					method: `${this.method_root}.seed_expense_forecast_from_actual_average`,
+					args: { forecast_scenario, target_cost_center, source_cost_center },
+					freeze: true,
+					freeze_message: __('Populating expense forecast from actual averages...')
+				});
+				const result = r.message || {};
+				frappe.show_alert({
+					message: __(`Expense forecast populated from ${result.source_label || sourceLabel} (${result.period_label || ''}). ${result.created || 0} created, ${result.updated || 0} updated.`),
+					indicator: 'green'
+				}, 10);
+				await this._load_forecast_data();
+			}
+		);
+	}
+
+	async _load_forecast_data() {
+		const forecast_scenario = this.$root.find('#ifd-forecast-scenario').val();
+		const cost_center = this.$root.find('#ifd-forecast-cost-centre').val();
+		const financial_year = this.$root.find('#ifd-forecast-fy').val();
+		if (!forecast_scenario || !cost_center || !financial_year) return;
+
+		this.$root.find('.ifd-forecast-context').html('<div class="ifd-runtime ifd-runtime-running">Loading Forecast...</div>');
+		const r = await frappe.call({
+			method: `${this.method_root}.get_forecast_data`,
+			args: { forecast_scenario, cost_center, financial_year },
+			freeze: true,
+			freeze_message: __('Building Forecast...')
+		});
+		this.forecast_data = r.message || {};
+		this.forecast_live_monthly = null;
+		this.forecast_live_summary = null;
+		this.forecast_dirty.clear();
+		this._init_forecast_state();
+		this._render_forecast_context();
+		this._render_forecast_kpis(this.forecast_data.fy_summary || this.forecast_data.summary || {});
+		this._render_forecast_statement();
+		this._render_forecast_charts();
+		this._update_forecast_save_state();
+	}
+
+	_init_forecast_state() {
+		this.forecast_state = new Map();
+		this.forecast_line_map = new Map();
+		(this.forecast_data.sections || []).forEach(section => {
+			(section.lines || []).forEach(line => {
+				this.forecast_line_map.set(line.account, line);
+				Object.values(line.months || {}).forEach(cell => {
+					const key = `${line.account}|${cell.forecast_period}`;
+					this.forecast_state.set(key, {
+						account: line.account,
+						forecast_period: cell.forecast_period,
+						volume: Number(cell.volume || 0),
+						volume_uom: cell.volume_uom || line.default_forecast_uom || '',
+						price_per_unit: Number(cell.price_per_unit || 0),
+						forecast_amount: Number(cell.forecast_amount || 0),
+						comments: cell.comments || '',
+						available: !!cell.available
+					});
+				});
+			});
+		});
+	}
+
+	_render_forecast_context() {
+		const scenario = this.forecast_data.scenario || {};
+		const filters = this.forecast_data.filters || {};
+		const perf = this.forecast_data.performance || {};
+		const editable = !!this.forecast_data.editable;
+		const actuals = this.forecast_data.actuals || {};
+		const mode = editable ? 'Editable' : (filters.cost_center === '__all__' ? 'Consolidated · Read only' : `${scenario.status || ''} · Read only`);
+		this.$root.find('#ifd-seed-expenses').prop('disabled', !editable);
+		this.$root.find('.ifd-forecast-context').html(`
+			<div class="ifd-context-title">${this._escape(scenario.scenario_name || '')}</div>
+			<div class="ifd-context-period">${this._escape(filters.cost_center_label || '')} &nbsp;|&nbsp; ${this._escape(filters.financial_year || '')} &nbsp;|&nbsp; ${this._escape(mode)}</div>
+			<div class="ifd-context-period">Actual YTD: ${this._escape(actuals.period_label || 'No actuals')} · Monthly columns marked A = Actual, F = Forecast</div>
+			<div class="ifd-runtime">
+				<span>Server ${this._duration(perf.server_runtime_ms)}</span>
+				<span>DB ${this._duration(perf.database_runtime_ms)}</span>
+				<span>${this._integer(perf.account_count || 0)} forecast accounts</span>
+				<span>${this._integer(perf.entry_count || 0)} stored entries in view</span>
+				<span class="ifd-forecast-dirty-indicator"></span>
+			</div>
+		`);
+	}
+
+	_render_forecast_kpis(summary) {
+		const cards = [
+			['FY Revenue', summary.revenue || 0],
+			['FY Other Income', summary.other_income || 0],
+			['FY Cost of Sales', summary.cost_of_sales || 0],
+			['FY Other Expenditure', summary.other_expenditure || 0],
+			['FY Profit / (Loss)', summary.profit_loss || 0],
+			['FY EBITDA', summary.ebitda || 0]
+		];
+		this.$root.find('.ifd-forecast-kpis').html(cards.map(([label, value]) => `
+			<div class="ifd-kpi ${label.includes('Profit / (Loss)') || label.includes('EBITDA') ? 'ifd-kpi-emphasis' : ''}">
+				<div class="ifd-kpi-label">${this._escape(label)}</div>
+				<div class="ifd-kpi-value">${this._money(value)}</div>
+			</div>
+		`).join(''));
+	}
+
+	_render_forecast_statement() {
+		const data = this.forecast_data || {};
+		const months = data.months || [];
+		const sections = data.sections || [];
+		const fyMonthlyMap = Object.fromEntries((data.fy_monthly || []).map(row => [row.key, row]));
+		const fySummary = data.fy_summary || data.summary || {};
+		const actualSummary = data.actuals?.summary || {};
+
+		let html = `<table class="ifd-table ifd-summary-table ifd-period-table ifd-forecast-table"><thead><tr><th>Forecast Income Statement</th><th class="ifd-number ifd-actual-col">Actual YTD</th>`;
+		months.forEach(month => {
+			const mode = month.display_mode || (month.actual_available ? 'actual' : (month.available ? 'forecast' : 'none'));
+			const tag = mode === 'actual' ? '<span class="ifd-month-tag ifd-month-tag-actual">A</span>' : (mode === 'forecast' ? '<span class="ifd-month-tag ifd-month-tag-forecast">F</span>' : '');
+			html += `<th class="ifd-number ifd-${mode}-month"><div>${this._escape(month.short_label || month.label)}</div>${tag}</th>`;
+		});
+		html += `<th class="ifd-number ifd-total-col">FY Total</th></tr></thead><tbody>`;
+
+		sections.forEach(section => {
+			const key = section.report_dimension;
+			const open = this.forecast_open_sections.has(key);
+			html += `<tr class="ifd-forecast-section-row ${open ? 'ifd-expanded' : ''}" data-fc-section="${this._escape_attr(key)}"><td><span class="ifd-chevron">›</span>${this._escape(section.label)}</td><td class="ifd-number ifd-actual-col">${this._money(section.actual_total || 0)}</td>`;
+			months.forEach(month => {
+				const mode = month.display_mode || 'none';
+				const value = section.fy_month_totals?.[month.key] || 0;
+				html += `<td class="ifd-number ifd-${mode}-month" data-fc-section-total="${this._escape_attr(key)}" data-fc-period="${this._escape_attr(month.period)}">${mode === 'none' ? '—' : this._money(value)}</td>`;
+			});
+			html += `<td class="ifd-number ifd-total-col" data-fc-section-period-total="${this._escape_attr(key)}">${this._money(section.fy_total || 0)}</td></tr>`;
+			html += `<tr class="ifd-forecast-section-detail" data-fc-section-detail="${this._escape_attr(key)}" style="display:${open ? 'table-row' : 'none'};"><td colspan="${months.length + 3}">${this._render_forecast_section_detail(section, months)}</td></tr>`;
+		});
+
+		html += `<tr class="ifd-profit-row"><td>Profit / (Loss)</td><td class="ifd-number ifd-actual-col">${this._money(actualSummary.profit_loss || 0)}</td>`;
+		months.forEach(month => {
+			const mode = month.display_mode || 'none';
+			const value = fyMonthlyMap[month.key]?.profit_loss || 0;
+			html += `<td class="ifd-number ifd-${mode}-month" data-fc-profit-period="${this._escape_attr(month.period)}">${mode === 'none' ? '—' : this._money(value)}</td>`;
+		});
+		html += `<td class="ifd-number ifd-total-col" data-fc-profit-total>${this._money(fySummary.profit_loss || 0)}</td></tr>`;
+
+		html += `<tr class="ifd-ebitda-row"><td>EBITDA</td><td class="ifd-number ifd-actual-col">${this._money(actualSummary.ebitda || 0)}</td>`;
+		months.forEach(month => {
+			const mode = month.display_mode || 'none';
+			const value = fyMonthlyMap[month.key]?.ebitda || 0;
+			html += `<td class="ifd-number ifd-${mode}-month" data-fc-ebitda-period="${this._escape_attr(month.period)}">${mode === 'none' ? '—' : this._money(value)}</td>`;
+		});
+		html += `<td class="ifd-number ifd-total-col" data-fc-ebitda-total>${this._money(fySummary.ebitda || 0)}</td></tr>`;
+		html += `</tbody></table>`;
+
+		const $wrap = this.$root.find('.ifd-forecast-table-wrap').html(html);
+		$wrap.find('.ifd-forecast-section-row').on('click', e => {
+			const $row = $(e.currentTarget);
+			const section = $row.data('fc-section');
+			const $detail = $wrap.find(`.ifd-forecast-section-detail[data-fc-section-detail="${section}"]`);
+			const open = $detail.is(':visible');
+			$detail.toggle(!open);
+			$row.toggleClass('ifd-expanded', !open);
+			if (open) this.forecast_open_sections.delete(section); else this.forecast_open_sections.add(section);
+		});
+		this._bind_forecast_inputs($wrap);
+	}
+
+	_render_forecast_section_detail(section, months) {
+		const editable = !!this.forecast_data.editable;
+		const uoms = this.forecast_data.uoms || [];
+		let html = `<div class="ifd-month-table-wrap"><table class="ifd-month-table ifd-fc-detail-table"><thead><tr><th class="ifd-account-col">Account</th><th>Description / Driver</th><th class="ifd-number ifd-actual-col">Actual YTD</th>`;
+		months.forEach(month => {
+			const mode = month.display_mode || 'none';
+			const tag = mode === 'actual' ? '<span class="ifd-month-tag ifd-month-tag-actual">A</span>' : (mode === 'forecast' ? '<span class="ifd-month-tag ifd-month-tag-forecast">F</span>' : '');
+			html += `<th class="ifd-number ifd-${mode}-month"><div>${this._escape(month.short_label || month.label)}</div>${tag}</th>`;
+		});
+		html += `<th class="ifd-number ifd-total-col">FY Total</th></tr></thead><tbody>`;
+
+		(section.lines || []).forEach(line => {
+			const driverBased = this._is_volume_price_method(line.forecast_method);
+			html += `<tr class="ifd-fc-account-value-row"><td class="ifd-account-col">${this._escape(line.account_number)}</td><td><div class="ifd-line-description">${this._escape(line.account_name)}</div><div class="ifd-line-meta">${this._escape(line.forecast_method || '')}${line.ebitda_treatment && line.ebitda_treatment !== 'Normal' ? ` · EBITDA: ${this._escape(line.ebitda_treatment)}` : ''}</div></td><td class="ifd-number ifd-actual-col">${this._money(line.actual_amount || 0)}</td>`;
+
+			months.forEach(month => {
+				const cell = line.months?.[month.key] || {};
+				const mode = month.display_mode || 'none';
+				if (mode === 'actual') {
+					html += `<td class="ifd-number ifd-actual-month" title="Actual">${this._money(cell.actual_amount || 0)}</td>`;
+				} else if (mode === 'forecast' && month.available && driverBased) {
+					html += `<td class="ifd-number ifd-fc-calculated ifd-forecast-month" data-fc-value-account="${this._escape_attr(line.account)}" data-fc-value-period="${this._escape_attr(cell.forecast_period)}">${this._money(cell.forecast_amount || 0)}</td>`;
+				} else if (mode === 'forecast' && month.available && editable) {
+					html += `<td class="ifd-number ifd-forecast-month"><input class="form-control ifd-fc-input ifd-fc-money-input" type="number" step="0.01" data-account="${this._escape_attr(line.account)}" data-period="${this._escape_attr(cell.forecast_period)}" data-field="forecast_amount" value="${Number(cell.forecast_amount || 0)}"></td>`;
+				} else if (mode === 'forecast' && month.available) {
+					html += `<td class="ifd-number ifd-forecast-month">${this._money(cell.forecast_amount || 0)}</td>`;
+				} else {
+					html += '<td class="ifd-number ifd-none-month">—</td>';
+				}
+			});
+			html += `<td class="ifd-number ifd-total-col" data-fc-line-total="${this._escape_attr(line.account)}">${this._money(line.fy_total || 0)}</td></tr>`;
+
+			if (driverBased) {
+				for (const driver of ['volume', 'volume_uom', 'price_per_unit']) {
+					const labels = { volume: 'Volume', volume_uom: 'Volume UOM', price_per_unit: 'Price / Unit' };
+					html += `<tr class="ifd-fc-driver-row"><td></td><td class="ifd-fc-driver-label">${labels[driver]}</td><td class="ifd-actual-col"></td>`;
+					months.forEach(month => {
+						const cell = line.months?.[month.key] || {};
+						const mode = month.display_mode || 'none';
+						if (mode !== 'forecast' || !month.available) { html += `<td class="ifd-number ifd-${mode}-month">—</td>`; return; }
+						if (driver === 'volume') {
+							if (editable) html += `<td class="ifd-forecast-month"><input class="form-control ifd-fc-input" type="number" step="0.01" data-account="${this._escape_attr(line.account)}" data-period="${this._escape_attr(cell.forecast_period)}" data-field="volume" value="${Number(cell.volume || 0)}"></td>`;
+							else html += `<td class="ifd-number ifd-forecast-month">${this._number2(cell.volume || 0)}</td>`;
+						} else if (driver === 'volume_uom') {
+							if (editable) {
+								const selected = cell.volume_uom || line.default_forecast_uom || '';
+								html += `<td class="ifd-forecast-month"><select class="form-control ifd-fc-input ifd-fc-uom" data-account="${this._escape_attr(line.account)}" data-period="${this._escape_attr(cell.forecast_period)}" data-field="volume_uom"><option value=""></option>${uoms.map(uom => `<option value="${this._escape_attr(uom)}" ${uom === selected ? 'selected' : ''}>${this._escape(uom)}</option>`).join('')}</select></td>`;
+							} else html += `<td class="ifd-forecast-month">${this._escape(cell.volume_uom || line.default_forecast_uom || '')}</td>`;
+						} else {
+							if (editable) html += `<td class="ifd-forecast-month"><input class="form-control ifd-fc-input" type="number" step="0.0001" data-account="${this._escape_attr(line.account)}" data-period="${this._escape_attr(cell.forecast_period)}" data-field="price_per_unit" value="${Number(cell.price_per_unit || 0)}"></td>`;
+							else html += `<td class="ifd-number ifd-forecast-month">${this._money4(cell.price_per_unit || 0)}</td>`;
+						}
+					});
+					html += '<td></td></tr>';
+				}
+			}
+		});
+
+		html += `<tr class="ifd-section-total-row"><td colspan="2">${this._escape(section.label)} Total</td><td class="ifd-number ifd-actual-col">${this._money(section.actual_total || 0)}</td>`;
+		months.forEach(month => {
+			const mode = month.display_mode || 'none';
+			const value = section.fy_month_totals?.[month.key] || 0;
+			html += `<td class="ifd-number ifd-${mode}-month" data-fc-section-total-detail="${this._escape_attr(section.report_dimension)}" data-fc-period="${this._escape_attr(month.period)}">${mode === 'none' ? '—' : this._money(value)}</td>`;
+		});
+		html += `<td class="ifd-number ifd-total-col" data-fc-section-detail-total="${this._escape_attr(section.report_dimension)}">${this._money(section.fy_total || 0)}</td></tr>`;
+		html += '</tbody></table></div>';
+		return html;
+	}
+
+	_bind_forecast_inputs($scope) {
+		$scope.find('.ifd-fc-input').on('input change', e => {
+			const $input = $(e.currentTarget);
+			const account = $input.data('account');
+			const period = $input.data('period');
+			const field = $input.data('field');
+			const key = `${account}|${period}`;
+			const state = this.forecast_state.get(key);
+			if (!state) return;
+
+			state[field] = field === 'volume_uom' ? $input.val() : Number($input.val() || 0);
+			const line = this.forecast_line_map.get(account);
+			if (line && this._is_volume_price_method(line.forecast_method)) {
+				state.forecast_amount = Number(state.volume || 0) * Number(state.price_per_unit || 0);
+			}
+			this.forecast_dirty.add(key);
+			this._recalculate_forecast_grid();
+			this._update_forecast_save_state();
+		});
+	}
+
+	_recalculate_forecast_grid() {
+		const months = this.forecast_data.months || [];
+		const actualMonthlyMap = Object.fromEntries(((this.forecast_data.actuals || {}).monthly || []).map(row => [row.key, row]));
+		const sectionTotals = {};
+		['IS-Revenue', 'IS-Other Income', 'IS-Cost of Sales', 'IS-Other Expenditure'].forEach(d => {
+			sectionTotals[d] = Object.fromEntries(months.map(m => [m.period, 0]));
+		});
+		const adjustments = Object.fromEntries(months.map(m => [m.period, { interest_paid: 0, depreciation: 0, interest_received: 0 }]));
+
+		this.forecast_line_map.forEach(line => {
+			let lineTotal = 0;
+			months.forEach(month => {
+				const mode = month.display_mode || 'none';
+				const cell = line.months?.[month.key] || {};
+				let amount = 0;
+				if (mode === 'actual') {
+					amount = Number(cell.actual_amount || 0);
+				} else if (mode === 'forecast' && month.available) {
+					const state = this.forecast_state.get(`${line.account}|${month.period}`);
+					if (state) amount = Number(state.forecast_amount || 0);
+					const treatment = String(line.ebitda_treatment || 'Normal').toLowerCase();
+					if (treatment === 'depreciation') adjustments[month.period].depreciation += amount;
+					if (treatment === 'interest paid') adjustments[month.period].interest_paid += amount;
+					if (treatment === 'interest received') adjustments[month.period].interest_received += amount;
+					this.$root.find(`[data-fc-value-account="${this._cssEscape(line.account)}"][data-fc-value-period="${month.period}"]`).text(this._money(amount));
+				}
+				lineTotal += amount;
+				sectionTotals[line.report_dimension][month.period] += amount;
+			});
+			this.$root.find(`[data-fc-line-total="${this._cssEscape(line.account)}"]`).text(this._money(lineTotal));
+		});
+
+		const liveMonthly = [];
+		const totals = { revenue: 0, other_income: 0, cost_of_sales: 0, other_expenditure: 0, profit_loss: 0, ebitda: 0, interest_paid: 0, depreciation: 0, interest_received: 0 };
+		months.forEach(month => {
+			const mode = month.display_mode || 'none';
+			const revenue = sectionTotals['IS-Revenue'][month.period] || 0;
+			const otherIncome = sectionTotals['IS-Other Income'][month.period] || 0;
+			const costSales = sectionTotals['IS-Cost of Sales'][month.period] || 0;
+			const otherExpense = sectionTotals['IS-Other Expenditure'][month.period] || 0;
+			let profit = revenue + otherIncome - costSales - otherExpense;
+			let adj = adjustments[month.period];
+			let ebitda = profit + adj.interest_paid + adj.depreciation - adj.interest_received;
+
+			if (mode === 'actual') {
+				const actual = actualMonthlyMap[month.key] || {};
+				profit = Number(actual.profit_loss || profit || 0);
+				ebitda = Number(actual.ebitda || 0);
+				adj = {
+					interest_paid: Number(actual.interest_paid || 0),
+					depreciation: Number(actual.depreciation || 0),
+					interest_received: Number(actual.interest_received || 0)
+				};
+			}
+
+			liveMonthly.push({ ...month, mode: mode === 'actual' ? 'Actual' : (mode === 'forecast' ? 'Forecast' : 'None'), revenue, other_income: otherIncome, cost_of_sales: costSales, other_expenditure: otherExpense, total_costs: costSales + otherExpense, profit_loss: profit, ebitda });
+			totals.revenue += revenue; totals.other_income += otherIncome; totals.cost_of_sales += costSales; totals.other_expenditure += otherExpense;
+			totals.profit_loss += profit; totals.ebitda += ebitda; totals.interest_paid += adj.interest_paid; totals.depreciation += adj.depreciation; totals.interest_received += adj.interest_received;
+
+			Object.entries({ 'IS-Revenue': revenue, 'IS-Other Income': otherIncome, 'IS-Cost of Sales': costSales, 'IS-Other Expenditure': otherExpense }).forEach(([dimension, value]) => {
+				this.$root.find(`[data-fc-section-total="${dimension}"][data-fc-period="${month.period}"], [data-fc-section-total-detail="${dimension}"][data-fc-period="${month.period}"]`).text(mode === 'none' ? '—' : this._money(value));
+			});
+			this.$root.find(`[data-fc-profit-period="${month.period}"]`).text(mode === 'none' ? '—' : this._money(profit));
+			this.$root.find(`[data-fc-ebitda-period="${month.period}"]`).text(mode === 'none' ? '—' : this._money(ebitda));
+		});
+
+		Object.entries(sectionTotals).forEach(([dimension, values]) => {
+			const total = Object.values(values).reduce((a, b) => a + Number(b || 0), 0);
+			this.$root.find(`[data-fc-section-period-total="${dimension}"], [data-fc-section-detail-total="${dimension}"]`).text(this._money(total));
+		});
+		this.$root.find('[data-fc-profit-total]').text(this._money(totals.profit_loss));
+		this.$root.find('[data-fc-ebitda-total]').text(this._money(totals.ebitda));
+		this._render_forecast_kpis(totals);
+		this.forecast_live_monthly = liveMonthly;
+		this.forecast_live_summary = totals;
+	}
+
+	_update_forecast_save_state() {
+		const editable = !!(this.forecast_data && this.forecast_data.editable);
+		const dirtyCount = this.forecast_dirty.size;
+		this.$root.find('#ifd-save-forecast').prop('disabled', !editable || !dirtyCount);
+		this.$root.find('.ifd-forecast-dirty-indicator').text(dirtyCount ? `${dirtyCount} unsaved month${dirtyCount === 1 ? '' : 's'}` : (editable ? 'No unsaved changes' : 'Read only'));
+		if (this.active_tab === 'forecast') {
+			this.page.set_primary_action(editable ? __('Save Forecast') : __('Refresh Forecast'), editable ? () => this._save_forecast() : () => this._load_forecast_data(), editable ? 'save' : 'refresh');
+		}
+	}
+
+	async _save_forecast() {
+		if (!this.forecast_data || !this.forecast_data.editable) {
+			if (this.active_tab === 'forecast') await this._load_forecast_data();
+			return;
+		}
+		if (!this.forecast_dirty.size) {
+			frappe.show_alert({ message: __('No forecast changes to save.'), indicator: 'blue' });
+			return;
+		}
+
+		const changes = [...this.forecast_dirty].map(key => ({ ...this.forecast_state.get(key) }));
+		const forecast_scenario = this.$root.find('#ifd-forecast-scenario').val();
+		const cost_center = this.$root.find('#ifd-forecast-cost-centre').val();
+		const r = await frappe.call({
+			method: `${this.method_root}.save_forecast_changes`,
+			args: { forecast_scenario, cost_center, changes: JSON.stringify(changes) },
+			freeze: true,
+			freeze_message: __('Saving Forecast...')
+		});
+		const result = r.message || {};
+		frappe.show_alert({
+			message: __(`Forecast saved: ${result.created || 0} created, ${result.updated || 0} updated, ${result.deleted || 0} cleared.`),
+			indicator: 'green'
+		}, 7);
+		await this._load_forecast_data();
+	}
+
+	_render_forecast_charts() {
+		const monthly = this.forecast_live_monthly || this.forecast_data.fy_monthly || [];
+		const labels = monthly.map(row => row.label);
+		this.$root.find('#ifd-forecast-revenue-chart, #ifd-forecast-expenses-chart, #ifd-forecast-profit-chart, #ifd-forecast-ebitda-chart').empty();
+		if (!monthly.length || !(frappe && frappe.Chart)) return;
+		const options = {
+			type: 'line', height: 235,
+			axisOptions: { xIsSeries: true },
+			lineOptions: { hideDots: 0, regionFill: 0 },
+			tooltipOptions: { formatTooltipY: d => this._million(d) }
+		};
+		this._make_chart('#ifd-forecast-revenue-chart', options, labels, 'Revenue Actual + Forecast', monthly.map(r => this._to_million(r.revenue)));
+		this._make_chart('#ifd-forecast-expenses-chart', options, labels, 'Expenses Actual + Forecast', monthly.map(r => this._to_million(r.total_costs)));
+		this._make_chart('#ifd-forecast-profit-chart', options, labels, 'Profit / (Loss) Actual + Forecast', monthly.map(r => this._to_million(r.profit_loss)));
+		this._make_chart('#ifd-forecast-ebitda-chart', options, labels, 'EBITDA Actual + Forecast', monthly.map(r => this._to_million(r.ebitda)));
+	}
+
+	_is_volume_price_method(value) {
+		const method = String(value || '').trim().toLowerCase();
+		return method === 'volume x price' || method === 'volume × price';
+	}
+
+	_number2(value) {
+		return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value || 0));
+	}
+
+	_money4(value) {
+		return `R ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(value || 0))}`;
+	}
+
+	_cssEscape(value) {
+		if (window.CSS && CSS.escape) return CSS.escape(String(value || ''));
+		return String(value || '').replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+	}
+
 	_default_financial_year_start() {
 		const parts = frappe.datetime.get_today().split('-').map(Number);
 		const year = parts[1] >= 3 ? parts[0] : parts[0] - 1;
@@ -674,8 +1240,38 @@ class IsFinDashboard {
 			.ifd-transaction-table td { padding: 9px 11px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
 			.ifd-transaction-total td { position: sticky; bottom: 0; background: var(--card-bg); font-weight: 800; border-top: 2px solid var(--border-color); }
 			.ifd-loading, .ifd-empty { padding: 20px; color: var(--text-muted); text-align: center; }
-			@media (max-width: 1100px) { .ifd-charts { grid-template-columns: 1fr; } .ifd-kpis { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
-			@media (max-width: 650px) { .ifd-kpis { grid-template-columns: 1fr; } .ifd-kpi-value { font-size: 18px; } }
+			.ifd-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin: 0 0 16px; }
+			.ifd-tab-button { border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 10px 16px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+			.ifd-tab-button.active { color: var(--text-color); border-bottom-color: var(--primary); }
+			.ifd-forecast-controls { display: grid; grid-template-columns: minmax(210px, 1.3fr) minmax(210px, 1.2fr) minmax(145px, .75fr) minmax(210px, 1.2fr) auto; gap: 12px; align-items: end; margin-bottom: 12px; }
+			.ifd-control-group label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+			.ifd-forecast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 1px; }
+			.ifd-actual-col { background: var(--subtle-fg) !important; font-weight: 700; border-right: 2px solid var(--border-color) !important; }
+			.ifd-forecast-context { margin: 8px 0 14px; }
+			.ifd-forecast-kpis { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+			.ifd-forecast-panel { margin-bottom: 16px; }
+			.ifd-forecast-table-wrap { overflow-x: auto; }
+			.ifd-forecast-table { min-width: 1510px; }
+			.ifd-forecast-section-row { cursor: pointer; font-weight: 800; background: var(--subtle-fg); }
+			.ifd-forecast-section-row:hover td { background: var(--control-bg); }
+			.ifd-forecast-section-detail > td { padding: 0 !important; }
+			.ifd-fc-detail-table { min-width: 1510px; }
+			.ifd-fc-account-value-row td { background: var(--card-bg); }
+			.ifd-fc-driver-row td { background: var(--subtle-fg); font-size: 12px; }
+			.ifd-fc-driver-label { padding-left: 28px !important; color: var(--text-muted); font-weight: 600; }
+			.ifd-fc-input { min-width: 92px; height: 30px; padding: 4px 6px; text-align: right; font-variant-numeric: tabular-nums; }
+			.ifd-fc-uom { text-align: left; min-width: 82px; }
+			.ifd-fc-calculated { font-weight: 700; }
+			.ifd-fc-unavailable { background: var(--subtle-fg) !important; color: var(--text-muted); }
+			.ifd-forecast-dirty-indicator { font-weight: 700; }
+			.ifd-month-tag { display: inline-block; margin-top: 3px; padding: 1px 5px; border-radius: 999px; font-size: 9px; font-weight: 800; line-height: 1.4; }
+			.ifd-month-tag-actual { background: var(--green-100, #e9f5ec); color: var(--green-700, #16794a); }
+			.ifd-month-tag-forecast { background: var(--blue-100, #e8f1ff); color: var(--blue-700, #2457a7); }
+			.ifd-actual-month { background: var(--green-50, #f4fbf6); }
+			.ifd-forecast-month { background: var(--blue-50, #f5f8ff); }
+			.ifd-none-month { color: var(--text-muted); background: var(--subtle-fg); }
+			@media (max-width: 1100px) { .ifd-charts { grid-template-columns: 1fr; } .ifd-kpis, .ifd-forecast-kpis { grid-template-columns: repeat(2, minmax(150px, 1fr)); } .ifd-forecast-controls { grid-template-columns: 1fr 1fr; } }
+			@media (max-width: 650px) { .ifd-kpis, .ifd-forecast-kpis { grid-template-columns: 1fr; } .ifd-kpi-value { font-size: 18px; } .ifd-forecast-controls { grid-template-columns: 1fr; } }
 		</style>`).appendTo('head');
 	}
 }
