@@ -47,7 +47,7 @@
    "options": "Supplier"
   },
   {
-   "fetch_from": "supplier.custom_supplier_code",
+   "fetch_from": "supplier.isf_supplier_code",
    "fieldname": "supplier_code",
    "fieldtype": "Data",
    "label": "Supplier Code",
@@ -181,7 +181,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-26 12:08:32.424965",
+ "modified": "2026-08-26 10:21:52.237483",
  "modified_by": "Administrator",
  "module": "Isambane Finances",
  "name": "IS Supplier Statement Parser",

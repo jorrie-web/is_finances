@@ -42,5 +42,6 @@ fixtures = [
 		"Account-isf_forecast_enabled",
 		"Account-isf_ebitda_treatment",
 		"Account-isf_forecast_method",
+		"Supplier-isf_supplier_code",
 	]]]},
 ]
