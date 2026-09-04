@@ -32,8 +32,6 @@ ALL_FORECAST_COST_CENTRES = "__all__"
 @frappe.whitelist()
 def get_financial_years():
     """Return available March-to-February financial years for the dashboard."""
-    frappe.only_for("System Manager")
-
     row = frappe.db.sql(
         """
         SELECT MIN(p.tx_date) AS min_date, MAX(p.tx_date) AS max_date
@@ -77,8 +75,6 @@ def get_financial_years():
 @frappe.whitelist()
 def get_cost_centres(from_date=None, to_date=None):
     """Return Sage branch values as cost centres. Blank branch = Head Office."""
-    frappe.only_for("System Manager")
-
     conditions = ["p.tx_date IS NOT NULL"]
     values = {}
 
@@ -119,8 +115,6 @@ def get_dashboard_data(from_date, to_date, cost_centre=None):
     - a specific site uses direct p.brch equality so a branch/date index can be used;
     - drilldowns remain lazy and only run when the user opens an account.
     """
-    frappe.only_for("System Manager")
-
     server_started = time.perf_counter()
     from_date, to_date = _validate_dates(from_date, to_date)
     cost_centre = _normalise_cost_centre(cost_centre)
@@ -160,8 +154,6 @@ def get_dashboard_data(from_date, to_date, cost_centre=None):
 @frappe.whitelist()
 def get_income_statement_drilldown(from_date, to_date, group_account, account_type, cost_centre=None):
     """Return month-column drilldown by cost centre or master-sub account."""
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     from_date, to_date = _validate_dates(from_date, to_date)
     cost_centre = _normalise_cost_centre(cost_centre)
@@ -211,8 +203,6 @@ def get_summary_metric_drilldown(
     Clicking a monthly summary amount returns that month by cost centre.
     Clicking the period total returns all selected months plus the period total.
     """
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     from_date, to_date = _validate_dates(from_date, to_date)
     cost_centre = _normalise_cost_centre(cost_centre)
@@ -362,8 +352,6 @@ def get_income_statement_transactions(
     master_sub_account=None,
 ):
     """Return lazy transaction detail for a clicked Income Statement amount."""
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     from_date, to_date = _validate_dates(from_date, to_date)
     cost_centre = _normalise_cost_centre(cost_centre)
@@ -423,6 +411,10 @@ def get_income_statement_transactions(
         SELECT
             p.tx_date,
             p.reference,
+            p.order_no,
+            p.cl_sup_name,
+            p.sage_projectcode,
+            p.sage_projectname,
             p.description,
             p.master_sub_account,
             CASE
@@ -452,6 +444,10 @@ def get_income_statement_transactions(
             {
                 "date": str(getdate(row.tx_date)) if row.tx_date else "",
                 "reference": row.reference or "",
+                "order_no": row.order_no or "",
+                "cl_sup_name": row.cl_sup_name or "",
+                "sage_projectcode": row.sage_projectcode or "",
+                "sage_projectname": row.sage_projectname or "",
                 "description": row.description or "",
                 "amount": amount,
                 "master_sub_account": row.master_sub_account or "",
@@ -474,8 +470,6 @@ def get_income_statement_transactions(
 @frappe.whitelist()
 def get_forecast_scenarios(company=None):
     """Return active forecast scenarios and their March-February FY windows."""
-    frappe.only_for("System Manager")
-
     filters = {"is_active": 1}
     if company:
         filters["company"] = company
@@ -526,8 +520,6 @@ def get_forecast_scenarios(company=None):
 @frappe.whitelist()
 def get_forecast_cost_centres(forecast_scenario):
     """Return standard ERPNext Cost Centers available to a scenario company."""
-    frappe.only_for("System Manager")
-
     scenario = _get_forecast_scenario(forecast_scenario)
 
     rows = frappe.get_all(
@@ -568,8 +560,6 @@ def get_forecast_cost_centres(forecast_scenario):
 @frappe.whitelist()
 def get_forecast_data(forecast_scenario, cost_center, financial_year):
     """Return one editable/read-only March-February forecast grid."""
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     scenario = _get_forecast_scenario(forecast_scenario)
     cost_center = (cost_center or ALL_FORECAST_COST_CENTRES).strip()
@@ -689,8 +679,6 @@ def get_expense_actual_average(forecast_scenario, source_cost_center):
     This makes the period explicit and avoids silently using actuals after the
     forecast starts.
     """
-    frappe.only_for("System Manager")
-
     scenario = _get_forecast_scenario(forecast_scenario)
     payload = _get_expense_actual_average_data(scenario, source_cost_center)
     return {
@@ -715,8 +703,6 @@ def seed_expense_forecast_from_actual_average(
     target cost centre across the full scenario horizon. Revenue/driver accounts
     are not changed. The resulting Forecast Entries remain fully editable.
     """
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     scenario = _get_forecast_scenario(forecast_scenario)
 
@@ -902,8 +888,6 @@ def seed_expense_forecast_from_actual_average(
 @frappe.whitelist()
 def save_forecast_changes(forecast_scenario, cost_center, changes):
     """Create/update/delete changed monthly Forecast Entries from the dashboard."""
-    frappe.only_for("System Manager")
-
     started = time.perf_counter()
     scenario = _get_forecast_scenario(forecast_scenario)
 
@@ -941,27 +925,19 @@ def save_forecast_changes(forecast_scenario, cost_center, changes):
             continue
         period = date(period.year, period.month, 1)
 
-        account_meta = frappe.db.get_value(
-            "Account",
-            account,
-            [
-                "company",
-                "isf_forecast_enabled",
-                "isf_forecast_method",
-                "isf_default_forecast_uom",
-            ],
-            as_dict=True,
-        )
+        account_meta = _get_account_row(account)
         if not account_meta or account_meta.company != scenario.company:
             frappe.throw(_("Invalid forecast Account: {0}").format(frappe.bold(account)))
-        if not cint(account_meta.isf_forecast_enabled):
+
+        account_fields = _resolve_account_forecast_fields(account_meta.keys())
+        if not cint(account_meta.get(account_fields["forecast_enabled"])):
             frappe.throw(_("Forecast is not enabled for Account {0}.").format(frappe.bold(account)))
 
-        method = (account_meta.isf_forecast_method or "").strip().lower()
+        method = (account_meta.get(account_fields["forecast_method"]) or "").strip().lower()
         volume = flt(change.get("volume"))
         price = flt(change.get("price_per_unit"))
         amount = flt(change.get("forecast_amount"))
-        volume_uom = change.get("volume_uom") or account_meta.isf_default_forecast_uom
+        volume_uom = change.get("volume_uom") or account_meta.get(account_fields["default_forecast_uom"])
         comments = change.get("comments") or ""
 
         if method in {"volume x price", "volume × price"}:
@@ -1113,47 +1089,138 @@ def _forecast_year_months(fy_start, scenario_start, scenario_end, actual_cutoff=
     return months
 
 
+def _resolve_account_forecast_fields(available_columns=None):
+    """Resolve Account forecast custom fields by preferred fieldname or label.
+
+    This avoids hard-coding custom field column names in SQL.
+    """
+    meta = frappe.get_meta("Account")
+    specs = {
+        "report_dimension": ("custom_report_dimension", "Report Dimension"),
+        "forecast_method": ("custom_forecast_method", "Forecast Method"),
+        "default_forecast_uom": ("custom_default_forecast_uom", "Default Forecast UOM"),
+        "ebitda_treatment": ("custom_ebitda_treatment", "EBITDA Treatment"),
+        "sage_account_type": ("custom_sage_account_type", "Sage Account Type"),
+        "forecast_enabled": ("custom_forecast_enabled", "Forecast Enabled"),
+    }
+
+    resolved = {}
+    available_columns = set(available_columns or [])
+
+    for logical_name, (preferred, label) in specs.items():
+        candidates = []
+        if meta.get_field(preferred):
+            candidates.append(preferred)
+        for df in meta.fields:
+            if (df.label or "").strip() == label and df.fieldname not in candidates:
+                candidates.append(df.fieldname)
+
+        if available_columns:
+            candidates = [name for name in candidates if name in available_columns]
+
+        if not candidates:
+            frappe.throw(
+                _("Account custom field '{0}' is missing from the database schema. "
+                  "Check Customize Form > Account, then run bench migrate and clear-cache.").format(label)
+            )
+
+        resolved[logical_name] = candidates[0]
+
+    return resolved
+
+
+def _get_account_row(account_name):
+    rows = frappe.db.sql(
+        "SELECT * FROM `tabAccount` WHERE name = %(name)s LIMIT 1",
+        {"name": account_name},
+        as_dict=True,
+    )
+    return rows[0] if rows else None
+
+
 def _get_forecast_accounts(company):
-    return frappe.db.sql(
+    """Return forecast-enabled P&L Accounts without hard-coded custom columns."""
+    account_rows = frappe.db.sql(
         """
-        SELECT
-            a.name AS account,
-            a.account_number,
-            a.account_name,
-            a.isf_report_dimension AS report_dimension,
-            a.isf_forecast_method AS forecast_method,
-            a.isf_default_forecast_uom AS default_forecast_uom,
-            a.isf_ebitda_treatment AS ebitda_treatment,
-            a.isf_sage_account_type AS sage_account_type,
-            sat.sage_accounttype_decsription AS account_type_description,
-            COALESCE(sat.sort_order, 0) AS sort_order
-        FROM `tabAccount` a
-        LEFT JOIN `tabSageAccountType` sat
-            ON sat.name = a.isf_sage_account_type
+        SELECT *
+        FROM `tabAccount`
         WHERE
-            a.company = %(company)s
-            AND a.is_group = 0
-            AND a.disabled = 0
-            AND a.report_type = 'Profit and Loss'
-            AND a.isf_forecast_enabled = 1
-            AND a.isf_report_dimension IN %(dimensions)s
-            AND a.account_number REGEXP '^[0-9]{4}$'
-        ORDER BY
-            CASE a.isf_report_dimension
-                WHEN 'IS-Revenue' THEN 1
-                WHEN 'IS-Other Income' THEN 2
-                WHEN 'IS-Cost of Sales' THEN 3
-                WHEN 'IS-Other Expenditure' THEN 4
-                ELSE 99
-            END,
-            COALESCE(sat.sort_order, 0),
-            CAST(a.account_number AS UNSIGNED),
-            a.account_name
+            company = %(company)s
+            AND is_group = 0
+            AND disabled = 0
+            AND report_type = 'Profit and Loss'
+            AND account_number REGEXP '^[0-9]{4}$'
         """,
-        {"company": company, "dimensions": tuple(IS_DIMENSIONS)},
+        {"company": company},
         as_dict=True,
     )
 
+    if not account_rows:
+        return []
+
+    fields = _resolve_account_forecast_fields(account_rows[0].keys())
+
+    sage_names = {
+        (row.get(fields["sage_account_type"]) or "").strip()
+        for row in account_rows
+        if row.get(fields["sage_account_type"])
+    }
+
+    sage_map = {}
+    if sage_names:
+        sage_rows = frappe.get_all(
+            "SageAccountType",
+            filters={"name": ["in", list(sage_names)]},
+            fields=["name", "sage_accounttype_decsription", "sort_order"],
+            limit_page_length=1000,
+        )
+        sage_map = {row.name: row for row in sage_rows}
+
+    dimension_order = {
+        "IS-Revenue": 1,
+        "IS-Other Income": 2,
+        "IS-Cost of Sales": 3,
+        "IS-Other Expenditure": 4,
+    }
+
+    result = []
+    for row in account_rows:
+        if not cint(row.get(fields["forecast_enabled"])):
+            continue
+
+        report_dimension = (row.get(fields["report_dimension"]) or "").strip()
+        if report_dimension not in IS_DIMENSIONS:
+            continue
+
+        sage_account_type = (row.get(fields["sage_account_type"]) or "").strip()
+        sage_type = sage_map.get(sage_account_type)
+
+        result.append(
+            frappe._dict(
+                account=row.name,
+                account_number=row.account_number,
+                account_name=row.account_name,
+                report_dimension=report_dimension,
+                forecast_method=row.get(fields["forecast_method"]) or "Amount",
+                default_forecast_uom=row.get(fields["default_forecast_uom"]) or "",
+                ebitda_treatment=row.get(fields["ebitda_treatment"]) or "Normal",
+                sage_account_type=sage_account_type,
+                account_type_description=(
+                    sage_type.sage_accounttype_decsription if sage_type else ""
+                ),
+                sort_order=cint(sage_type.sort_order) if sage_type else 0,
+            )
+        )
+
+    result.sort(
+        key=lambda row: (
+            dimension_order.get(row.report_dimension, 99),
+            row.sort_order or 0,
+            int(row.account_number) if str(row.account_number).isdigit() else 999999,
+            row.account_name or "",
+        )
+    )
+    return result
 
 def _get_forecast_entries(forecast_scenario, cost_center, from_date, to_date):
     values = {

@@ -19,11 +19,15 @@ The controller provides both connection testing and incremental POSTGL import:
 6. Read the project ID from ``POSTGL.Project`` and use it only as a lookup key
    into the Sage ``Project`` table via ``Project.ProjectLink`` to retrieve
    ``ProjectCode``, ``ProjectName``, and ``ProjectDescription``.
-7. POSTGL remains the master/driving table: Accounts and Project can enrich a
-   POSTGL row but can never create additional ERP transaction rows themselves.
-8. Bulk insert the completed rows into the Frappe ``Sage POSTGL Entry`` DocType.
-9. Advance the per-company high-water mark only after a successful batch.
-10. Never insert, update, or delete records in the Sage SQL Server database.
+7. Read ``POSTGL.Order_No`` directly into the ERP ``order_no`` field.
+8. Use ``POSTGL.DrCrAccount`` as a lookup key. Look in Sage ``Vendor`` first;
+   only if no Vendor match exists, fall back to Sage ``Client``. Retrieve
+   ``DCLink``, ``Account``, and ``Name`` into the ERP customer/supplier fields.
+9. POSTGL remains the master/driving table: lookup tables can enrich a POSTGL
+   row but can never create additional ERP transaction rows themselves.
+10. Bulk insert the completed rows into the Frappe ``Sage POSTGL Entry`` DocType.
+11. Advance the per-company high-water mark only after a successful batch.
+12. Never insert, update, or delete records in the Sage SQL Server database.
 
 The global ``postgl_sync_record_limit`` setting controls how many new records
 are imported per Company per run. 0 means unlimited; unlimited mode is still
@@ -138,6 +142,8 @@ POSTGL_TARGET_DOCTYPE = "Sage POSTGL Entry"
 POSTGL_SOURCE_TABLE = "POSTGL"
 ACCOUNTS_SOURCE_TABLE = "Accounts"
 PROJECT_SOURCE_TABLE = "Project"
+VENDOR_SOURCE_TABLE = "Vendor"
+CLIENT_SOURCE_TABLE = "Client"
 POSTGL_RECORD_LIMIT_FIELD = "postgl_sync_record_limit"
 
 # Blank/missing uses a safe first-run default. Set 0 in IS Finance Setup for
@@ -473,20 +479,12 @@ def _build_postgl_select_sql(fetch_size: int) -> str:
     """
     Build the read-only SQL Server query for the next POSTGL batch.
 
-    POSTGL is deliberately the master/driving table.
+    POSTGL is the master/driving table.
 
-    Account enrichment:
-      POSTGL.AccountLink -> Accounts.AccountLink
-
-    Project enrichment:
-      POSTGL.Project -> Project.ProjectLink
-
-    ``OUTER APPLY ... TOP 1`` is used for both lookup tables. This guarantees
-    that one POSTGL transaction can never be multiplied into multiple ERP
-    transactions if a lookup table unexpectedly contains duplicate keys.
-
-    Missing Accounts or Project matches do not suppress the POSTGL transaction;
-    the related lookup fields are simply returned as NULL.
+    Customer/Supplier lookup rule:
+      Id = 'Inv'  -> Client lookup using DrCrAccount = Client.DCLink
+      Id = 'APTx' -> Vendor lookup using DrCrAccount = Vendor.DCLink
+      Other Id    -> no lookup; classify as CashBook
     """
     fetch_size = int(fetch_size)
 
@@ -512,7 +510,27 @@ def _build_postgl_select_sql(fetch_size: int) -> str:
             p.[Project] AS [ProjectID],
             pr.[ProjectCode],
             pr.[ProjectName],
-            pr.[ProjectDescription]
+            pr.[ProjectDescription],
+
+            p.[Order_No],
+
+            CASE
+                WHEN p.[Id] = 'Inv' THEN c.[DCLink]
+                WHEN p.[Id] = 'APTx' THEN v.[DCLink]
+                ELSE p.[DrCrAccount]
+            END AS [DrCrAccountCode],
+
+            CASE
+                WHEN p.[Id] = 'Inv' THEN c.[Account]
+                WHEN p.[Id] = 'APTx' THEN v.[Account]
+                ELSE 'CashBook'
+            END AS [ClSupAccountNumber],
+
+            CASE
+                WHEN p.[Id] = 'Inv' THEN c.[Name]
+                WHEN p.[Id] = 'APTx' THEN v.[Name]
+                ELSE 'CashBook'
+            END AS [ClSupName]
 
         FROM [{POSTGL_SOURCE_TABLE}] AS p
 
@@ -535,6 +553,26 @@ def _build_postgl_select_sql(fetch_size: int) -> str:
             WHERE proj.[ProjectLink] = p.[Project]
         ) AS pr
 
+        OUTER APPLY (
+            SELECT TOP 1
+                cli.[DCLink],
+                cli.[Account],
+                cli.[Name]
+            FROM [{CLIENT_SOURCE_TABLE}] AS cli
+            WHERE p.[Id] = 'Inv'
+              AND cli.[DCLink] = p.[DrCrAccount]
+        ) AS c
+
+        OUTER APPLY (
+            SELECT TOP 1
+                ven.[DCLink],
+                ven.[Account],
+                ven.[Name]
+            FROM [{VENDOR_SOURCE_TABLE}] AS ven
+            WHERE p.[Id] = 'APTx'
+              AND ven.[DCLink] = p.[DrCrAccount]
+        ) AS v
+
         WHERE p.[AutoIdx] > ?
         ORDER BY p.[AutoIdx] ASC
     """
@@ -549,10 +587,12 @@ def _bulk_insert_postgl_rows(
     Bulk insert a POSTGL-master batch enriched by Accounts and Project.
 
     Row positions:
-      0-7   POSTGL transaction fields
-      8-11  Accounts lookup fields
-      12    POSTGL.Project (project ID)
-      13-15 Project lookup fields
+      0-7    POSTGL transaction fields
+      8-11   Accounts lookup fields
+      12     POSTGL.Project (project ID)
+      13-15  Project lookup fields
+      16     POSTGL.Order_No
+      17-19  Id-based Client/Vendor/CashBook fields
 
     Frappe document names are deterministic hashes of Company + AutoIdx, making
     retries idempotent even though AutoIdx can repeat across Sage companies.
@@ -593,6 +633,10 @@ def _bulk_insert_postgl_rows(
         "sage_projectcode",
         "sage_projectname",
         "sage_project_description",
+        "order_no",
+        "drcr_account_code",
+        "cl_sup_account_number",
+        "cl_sup_name",
     ]
 
     values = []
@@ -623,6 +667,10 @@ def _bulk_insert_postgl_rows(
                 row[13],
                 row[14],
                 row[15],
+                row[16],
+                row[17],
+                row[18],
+                row[19],
             )
         )
 
