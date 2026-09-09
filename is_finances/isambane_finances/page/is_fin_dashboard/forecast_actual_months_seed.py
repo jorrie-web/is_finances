@@ -9,29 +9,51 @@ from . import is_fin_dashboard as dashboard
 from .forecast_actual_months import AUTO_ACTUAL_MONTHS, _actual_cutoff_for_selection
 
 
-def _actual_average_for_cutoff(scenario, source_cost_center, cutoff):
+def _average_window(fy_start, cutoff):
+    """Return up to the last 3 actual months, never crossing before the selected FY.
+
+    Examples for a March FY start:
+    - Mar actual only      -> Mar / 1
+    - Mar-Apr actual       -> Mar-Apr / 2
+    - Mar-May actual       -> Mar-May / 3
+    - Mar-Jun actual       -> Apr-Jun / 3
+    """
+    if cutoff < fy_start:
+        frappe.throw(_("At least 1 Actual Month is required to calculate the expense average."))
+
+    anchor_month = date(cutoff.year, cutoff.month, 1)
+    three_month_start = getdate(add_months(anchor_month, -2))
+    average_from = max(fy_start, date(three_month_start.year, three_month_start.month, 1))
+    average_to = cutoff
+    month_count = ((anchor_month.year - average_from.year) * 12) + (anchor_month.month - average_from.month) + 1
+    month_count = max(1, min(3, month_count))
+    return average_from, average_to, month_count
+
+
+def _average_label(month_count):
+    return _("{0}M actual average").format(month_count)
+
+
+def _actual_average_for_cutoff(scenario, source_cost_center, cutoff, fy_start):
     source_cost_center = (source_cost_center or dashboard.ALL_FORECAST_COST_CENTRES).strip()
     branch_sql, branch_values, source_info = dashboard._forecast_actual_branch_condition(
         scenario.company, source_cost_center
     )
 
-    anchor_month = date(cutoff.year, cutoff.month, 1)
-    start_month = getdate(add_months(anchor_month, -2))
-    average_from = date(start_month.year, start_month.month, 1)
-    average_to = cutoff
-
+    average_from, average_to, month_count = _average_window(fy_start, cutoff)
     signed = dashboard._signed_amount_sql()
     values = {
         "company": scenario.company,
         "from_date": average_from,
         "to_date": average_to,
+        "month_count": month_count,
         **branch_values,
     }
     rows = frappe.db.sql(
         f"""
         SELECT
             LEFT(TRIM(COALESCE(p.master_sub_account, '')), 4) AS group_account,
-            SUM({signed}) / 3.0 AS average_amount
+            SUM({signed}) / %(month_count)s AS average_amount
         FROM `tabSage POSTGL Entry` p
         INNER JOIN `tabSageAccountType` a
             ON a.sage_account_type = p.iaccounttype
@@ -50,6 +72,8 @@ def _actual_average_for_cutoff(scenario, source_cost_center, cutoff):
         "source_label": source_info["label"],
         "from_date": average_from,
         "to_date": average_to,
+        "month_count": month_count,
+        "average_label": _average_label(month_count),
         "period_label": f"{average_from.strftime('%d %b %Y')} - {average_to.strftime('%d %b %Y')}",
         "averages": {
             str(row.group_account): flt(row.average_amount, 2)
@@ -129,20 +153,16 @@ def _bulk_cost_centers(company, targets):
     return [by_name[name] for name in targets]
 
 
-def _bulk_own_site_averages(scenario, cost_centers, cutoff):
-    """Read all selected sites' 3M expense averages in one Sage query."""
+def _bulk_own_site_averages(scenario, cost_centers, cutoff, fy_start):
+    """Read all selected sites' available actual-month expense averages in one query."""
     if not cost_centers:
-        return {}, ""
+        return {}, "", 0
 
-    anchor_month = date(cutoff.year, cutoff.month, 1)
-    start_month = getdate(add_months(anchor_month, -2))
-    average_from = date(start_month.year, start_month.month, 1)
-    average_to = cutoff
+    average_from, average_to, month_count = _average_window(fy_start, cutoff)
     branches = [(row.cost_center_number or "").strip() for row in cost_centers]
     branch_placeholders = ",".join(["%s"] * len(branches))
     signed = dashboard._signed_amount_sql()
 
-    # Blank Sage branches are treated as MID, matching the dashboard's existing rule.
     rows = frappe.db.sql(
         f"""
         SELECT
@@ -151,7 +171,7 @@ def _bulk_own_site_averages(scenario, cost_centers, cutoff):
                 ELSE TRIM(p.brch)
             END AS branch_key,
             LEFT(TRIM(COALESCE(p.master_sub_account, '')), 4) AS group_account,
-            SUM({signed}) / 3.0 AS average_amount
+            SUM({signed}) / %s AS average_amount
         FROM `tabSage POSTGL Entry` p
         INNER JOIN `tabSageAccountType` a
             ON a.sage_account_type = p.iaccounttype
@@ -168,7 +188,7 @@ def _bulk_own_site_averages(scenario, cost_centers, cutoff):
             CASE WHEN p.brch IS NULL OR TRIM(p.brch) = '' THEN 'MID' ELSE TRIM(p.brch) END,
             LEFT(TRIM(COALESCE(p.master_sub_account, '')), 4)
         """,
-        tuple([scenario.company, average_from, average_to] + branches + branches),
+        tuple([month_count, scenario.company, average_from, average_to] + branches + branches),
         as_dict=True,
     )
 
@@ -177,7 +197,7 @@ def _bulk_own_site_averages(scenario, cost_centers, cutoff):
         averages.setdefault(str(row.branch_key), {})[str(row.group_account)] = flt(row.average_amount, 2)
 
     period_label = f"{average_from.strftime('%d %b %Y')} - {average_to.strftime('%d %b %Y')}"
-    return averages, period_label
+    return averages, period_label, month_count
 
 
 def _insert_forecast_rows(rows):
@@ -216,11 +236,7 @@ def bulk_seed_expense_forecast_from_actual_average(
     financial_year,
     actual_months=AUTO_ACTUAL_MONTHS,
 ):
-    """High-performance 3M expense fill for one or many Forecast Cost Centers.
-
-    Consolidated mode is handled in one request, one Sage aggregation query and
-    bulk delete/insert operations instead of one full server round-trip per site.
-    """
+    """High-performance expense fill using up to the last 3 selected actual months."""
     started = time.perf_counter()
     scenario = dashboard._get_forecast_scenario(forecast_scenario)
     if scenario.status != "Draft":
@@ -236,7 +252,7 @@ def bulk_seed_expense_forecast_from_actual_average(
     target_cost_centers = target_cost_centers or []
     cost_centers = _bulk_cost_centers(scenario.company, target_cost_centers)
 
-    _, _, actual_cutoff, first_forecast_month, last_forecast_month, periods = _forecast_window(
+    fy_start, _, actual_cutoff, first_forecast_month, last_forecast_month, periods = _forecast_window(
         scenario, financial_year, actual_months
     )
     if not periods:
@@ -245,6 +261,10 @@ def bulk_seed_expense_forecast_from_actual_average(
             "account_count": 0, "month_count": 0, "cost_center_count": len(cost_centers),
             "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
         }
+
+    # With zero selected actual months there is no valid base period to average.
+    if actual_cutoff < fy_start:
+        frappe.throw(_("Select at least 1 Actual Month before using Fill Expenses from Actual Average."))
 
     expense_accounts = _expense_accounts(scenario.company)
     if not expense_accounts:
@@ -257,14 +277,17 @@ def bulk_seed_expense_forecast_from_actual_average(
     source_cost_center = (source_cost_center or dashboard.ALL_FORECAST_COST_CENTRES).strip()
     own_site_mode = source_cost_center == dashboard.ALL_FORECAST_COST_CENTRES
     if own_site_mode:
-        averages_by_branch, period_label = _bulk_own_site_averages(scenario, cost_centers, actual_cutoff)
+        averages_by_branch, period_label, average_month_count = _bulk_own_site_averages(
+            scenario, cost_centers, actual_cutoff, fy_start
+        )
         shared_averages = None
         source_label = _("Each Cost Centre")
     else:
-        payload = _actual_average_for_cutoff(scenario, source_cost_center, actual_cutoff)
+        payload = _actual_average_for_cutoff(scenario, source_cost_center, actual_cutoff, fy_start)
         shared_averages = payload["averages"]
         averages_by_branch = None
         period_label = payload["period_label"]
+        average_month_count = payload["month_count"]
         source_label = payload["source_label"]
 
     target_names = [row.name for row in cost_centers]
@@ -272,8 +295,6 @@ def bulk_seed_expense_forecast_from_actual_average(
     target_ph = ",".join(["%s"] * len(target_names))
     account_ph = ",".join(["%s"] * len(account_names))
 
-    # The Fill action is explicitly an overwrite, so replacing the selected
-    # expense forecast window is both faster and clearer than row-by-row updates.
     existing_count = frappe.db.sql(
         f"""
         SELECT COUNT(*)
@@ -302,11 +323,15 @@ def bulk_seed_expense_forecast_from_actual_average(
     user = frappe.session.user
     now = frappe.utils.now_datetime()
     new_rows = []
+    input_source = f"Last {average_month_count}M Actual Avg"
+    average_label = _average_label(average_month_count)
+
     for cc in cost_centers:
         branch = (cc.cost_center_number or "").strip()
         averages = averages_by_branch.get(branch, {}) if own_site_mode else shared_averages
-        note = _("Seeded from {0} 3M actual average: {1}").format(
+        note = _("Seeded from {0} {1}: {2}").format(
             f"{branch} - {cc.cost_center_name or cc.name}" if own_site_mode else source_label,
+            average_label,
             period_label,
         )
         for account in expense_accounts:
@@ -323,7 +348,7 @@ def bulk_seed_expense_forecast_from_actual_average(
                     account.sage_account_type or "", account.report_dimension,
                     1, account.forecast_method or "Amount", account.ebitda_treatment or "Normal",
                     0, account.default_forecast_uom or "", 0, average,
-                    branch, "Last 3M Actual Avg", note,
+                    branch, input_source, note,
                 ))
 
     created = _insert_forecast_rows(new_rows)
@@ -335,6 +360,8 @@ def bulk_seed_expense_forecast_from_actual_average(
         "account_count": len(expense_accounts),
         "month_count": len(periods),
         "cost_center_count": len(cost_centers),
+        "average_month_count": average_month_count,
+        "average_label": average_label,
         "source_label": source_label,
         "period_label": period_label,
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
