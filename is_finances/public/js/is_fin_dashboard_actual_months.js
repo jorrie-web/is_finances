@@ -1,11 +1,17 @@
 (() => {
-	const DASHBOARD_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.is_fin_dashboard.get_forecast_data';
-	const ACTUAL_MONTH_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months.get_forecast_data';
-	const ACTUAL_MONTH_SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
+	const ACTUAL_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.is_fin_dashboard.get_dashboard_data';
+	const FORECAST_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.is_fin_dashboard.get_forecast_data';
+	const FORECAST_ACTUAL_MONTH_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months.get_forecast_data';
+	const SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
-	let seedObserver = null;
-	let allowForecastBuild = false;
-	let forecastWasBuilt = false;
+
+	let allowActualRun = false;
+	let allowForecastRun = false;
+	let installed = false;
+
+	function $root() {
+		return $('.is-fin-dashboard');
+	}
 
 	function selectedActualMonths() {
 		const value = String($('#ifd-forecast-actual-months').val() || 'auto').trim();
@@ -16,16 +22,29 @@
 		return String($('#ifd-forecast-fy').val() || '').trim();
 	}
 
-	function emptyForecastResponse() {
-		const scenarioName = String($('#ifd-forecast-scenario').val() || '').trim();
-		const costCenter = String($('#ifd-forecast-cost-centre').val() || '__all__').trim();
-		const financialYear = selectedFinancialYear();
+	function emptyActualResponse() {
 		return {
-			scenario: { name: scenarioName, scenario_name: '', status: 'Draft' },
+			filters: {},
+			performance: {},
+			sections: [],
+			summary: {},
+			monthly: [],
+			months: []
+		};
+	}
+
+	function emptyForecastResponse() {
+		const costCenter = String($('#ifd-forecast-cost-centre').val() || '__all__').trim();
+		return {
+			scenario: {
+				name: String($('#ifd-forecast-scenario').val() || '').trim(),
+				scenario_name: '',
+				status: 'Draft'
+			},
 			filters: {
 				cost_center: costCenter,
 				cost_center_label: costCenter === '__all__' ? 'All Cost Centres (Consolidated)' : costCenter,
-				financial_year: financialYear,
+				financial_year: selectedFinancialYear(),
 				actual_months: selectedActualMonths(),
 				actual_months_applied: 0
 			},
@@ -36,158 +55,143 @@
 			monthly: [],
 			fy_summary: {},
 			fy_monthly: [],
-			actuals: { period_label: 'Set parameters, fill expenses if required, then Run Forecast', summary: {}, monthly: [] },
+			actuals: {
+				period_label: 'Select parameters, fill expenses if required, then press Run Forecast',
+				summary: {},
+				monthly: []
+			},
 			uoms: [],
 			performance: { server_runtime_ms: 0, database_runtime_ms: 0, account_count: 0, entry_count: 0 }
 		};
 	}
 
-	function installCallOverride() {
-		if (!window.frappe || !frappe.call || frappe.call.__ifdActualMonthsWrapped) return;
-		const originalCall = frappe.call;
-		const wrapped = function(...args) {
-			const options = args[0];
-			const isForecastBuild = options && typeof options === 'object' &&
-				(options.method === DASHBOARD_METHOD || options.method === ACTUAL_MONTH_METHOD);
-
-			if (isForecastBuild) {
-				if (!allowForecastBuild) {
-					const response = { message: emptyForecastResponse() };
-					if (typeof options.callback === 'function') {
-						setTimeout(() => options.callback(response), 0);
-					}
-					setTimeout(showSetupMessage, 0);
-					return Promise.resolve(response);
-				}
-
-				args[0] = {
-					...options,
-					method: ACTUAL_MONTH_METHOD,
-					args: {
-						...(options.args || {}),
-						actual_months: selectedActualMonths()
-					}
-				};
-				allowForecastBuild = false;
-				forecastWasBuilt = true;
-			}
-			return originalCall.apply(this, args);
-		};
-		wrapped.__ifdActualMonthsWrapped = true;
-		wrapped.__ifdActualMonthsOriginal = originalCall;
-		frappe.call = wrapped;
-	}
-
-	function installStyle() {
-		if (document.getElementById('ifd-actual-months-style')) return;
-		$(`<style id="ifd-actual-months-style">
-			.is-fin-dashboard .ifd-forecast-controls {
-				grid-template-columns: minmax(190px, 1.25fr) minmax(190px, 1.15fr) minmax(135px, .7fr) minmax(125px, .65fr) minmax(190px, 1.15fr) auto;
-			}
-			.is-fin-dashboard #ifd-seed-expenses.ifd-force-enabled {
-				opacity: 1 !important;
-				pointer-events: auto !important;
-				cursor: pointer !important;
-			}
-			.is-fin-dashboard .ifd-seed-expense-note,
-			.is-fin-dashboard .ifd-run-forecast-note {
-				font-size: 11px;
-				line-height: 1.25;
-				margin-top: 4px;
-				max-width: 320px;
-				color: var(--text-muted);
-			}
-			.is-fin-dashboard .ifd-forecast-setup-message {
-				padding: 14px 16px;
-				margin-top: 10px;
-				border: 1px solid var(--border-color);
-				border-radius: 8px;
-				background: var(--fg-color);
-				font-size: 13px;
-			}
-			@media (max-width: 1250px) {
-				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: repeat(3, minmax(170px, 1fr)); }
-				.is-fin-dashboard .ifd-forecast-actions { grid-column: 1 / -1; }
-			}
-			@media (max-width: 800px) {
-				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: 1fr 1fr; }
-			}
-			@media (max-width: 520px) {
-				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: 1fr; }
-			}
-		</style>`).appendTo('head');
-	}
-
-	function showSetupMessage() {
-		const $context = $('.is-fin-dashboard .ifd-forecast-context');
-		if (!$context.length) return;
-		$context.html(`
-			<div class="ifd-forecast-setup-message">
-				<strong>Forecast not run yet.</strong><br>
-				1. Select Forecast Scenario, Cost Centre, Financial Year and Actual Months.<br>
-				2. If required, press <strong>Fill Expenses from 3M Avg</strong>.<br>
-				3. Press <strong>Run Forecast</strong> to build the forecast.
-			</div>
-		`);
-		$('.is-fin-dashboard .ifd-forecast-kpis').empty();
-		$('.is-fin-dashboard .ifd-forecast-table-wrap').empty();
-		$('.is-fin-dashboard .ifd-forecast-charts .ifd-chart').empty();
-	}
-
-	function markParametersChanged() {
-		forecastWasBuilt = false;
-		allowForecastBuild = false;
-		setTimeout(showSetupMessage, 0);
-	}
-
-	function installRunForecastButton() {
-		const button = document.querySelector('.is-fin-dashboard #ifd-refresh-forecast');
-		if (!button) return;
-		button.textContent = 'Run Forecast';
-		const $button = $(button);
-		if (!$button.next('.ifd-run-forecast-note').length) {
-			$('<div class="ifd-run-forecast-note">Builds the forecast only after you have selected all parameters.</div>').insertAfter($button);
+	function resolveWithoutServer(options, message) {
+		const response = { message };
+		if (typeof options.callback === 'function') {
+			setTimeout(() => options.callback(response), 0);
 		}
-		if (button.__ifdExplicitRunCapture) return;
-		button.__ifdExplicitRunCapture = true;
-		button.addEventListener('click', () => {
-			const scenario = String($('#ifd-forecast-scenario').val() || '').trim();
-			const costCenter = String($('#ifd-forecast-cost-centre').val() || '').trim();
-			const financialYear = selectedFinancialYear();
-			if (!scenario || !costCenter || !financialYear) return;
-			allowForecastBuild = true;
-		}, true);
+		return Promise.resolve(response);
 	}
 
-	function forceEnableSeedButton() {
+	function enableSeedButton() {
 		const button = document.querySelector('.is-fin-dashboard #ifd-seed-expenses');
 		if (!button) return;
 		button.disabled = false;
 		button.removeAttribute('disabled');
 		button.removeAttribute('aria-disabled');
 		button.classList.remove('disabled');
-		button.classList.add('ifd-force-enabled');
 	}
 
-	function ensureSeedMessage() {
-		const $button = $('.is-fin-dashboard #ifd-seed-expenses');
-		if (!$button.length || $('.is-fin-dashboard .ifd-seed-expense-note').length) return;
-		$('<div class="ifd-seed-expense-note">Pressing this button forecasts all blue F expense months from the selected 3-month actual average.</div>')
-			.insertAfter($button);
+	function installCallGuard() {
+		if (!window.frappe || !frappe.call || frappe.call.__ifdManualRunGuard) return;
+		const originalCall = frappe.call;
+
+		const wrapped = function(...args) {
+			const options = args[0];
+			if (!options || typeof options !== 'object') {
+				return originalCall.apply(this, args);
+			}
+
+			if (options.method === ACTUAL_METHOD) {
+				if (!allowActualRun) {
+					return resolveWithoutServer(options, emptyActualResponse());
+				}
+				allowActualRun = false;
+				return originalCall.apply(this, args);
+			}
+
+			if (options.method === FORECAST_METHOD || options.method === FORECAST_ACTUAL_MONTH_METHOD) {
+				if (!allowForecastRun) {
+					const promise = resolveWithoutServer(options, emptyForecastResponse());
+					setTimeout(enableSeedButton, 0);
+					return promise;
+				}
+
+				args[0] = {
+					...options,
+					method: FORECAST_ACTUAL_MONTH_METHOD,
+					args: {
+						...(options.args || {}),
+						actual_months: selectedActualMonths()
+					}
+				};
+				allowForecastRun = false;
+				return originalCall.apply(this, args);
+			}
+
+			return originalCall.apply(this, args);
+		};
+
+		wrapped.__ifdManualRunGuard = true;
+		wrapped.__ifdOriginal = originalCall;
+		frappe.call = wrapped;
 	}
 
-	function observeSeedButton() {
-		const button = document.querySelector('.is-fin-dashboard #ifd-seed-expenses');
-		if (!button || (seedObserver && seedObserver.__button === button)) return;
-		if (seedObserver) seedObserver.disconnect();
-		seedObserver = new MutationObserver(() => forceEnableSeedButton());
-		seedObserver.__button = button;
-		seedObserver.observe(button, { attributes: true, attributeFilter: ['disabled', 'class', 'aria-disabled'] });
+	function installStyle() {
+		if (document.getElementById('ifd-manual-run-style')) return;
+		$(`<style id="ifd-manual-run-style">
+			.is-fin-dashboard .ifd-forecast-controls {
+				grid-template-columns: minmax(190px,1.25fr) minmax(190px,1.15fr) minmax(135px,.7fr) minmax(125px,.65fr) minmax(190px,1.15fr) auto;
+			}
+			.is-fin-dashboard .ifd-manual-note {
+				font-size: 11px;
+				line-height: 1.3;
+				margin-top: 4px;
+				color: var(--text-muted);
+			}
+			.is-fin-dashboard .ifd-forecast-setup-message {
+				padding: 12px 14px;
+				margin-top: 8px;
+				border: 1px solid var(--border-color);
+				border-radius: 6px;
+				background: var(--fg-color);
+			}
+		</style>`).appendTo('head');
+	}
+
+	function showActualSetup() {
+		if (!$root().length) return;
+		$('.is-fin-dashboard .ifd-context').html(
+			'<div class="ifd-forecast-setup-message"><strong>Income Statement not run yet.</strong> Select your period and Cost Centre, then press <strong>Run Income Statement</strong>.</div>'
+		);
+		$('.is-fin-dashboard .ifd-kpis').empty();
+		$('.is-fin-dashboard .ifd-table-wrap').empty();
+		$('.is-fin-dashboard #ifd-revenue-chart, .is-fin-dashboard #ifd-expenses-chart, .is-fin-dashboard #ifd-profit-chart, .is-fin-dashboard #ifd-ebitda-chart').empty();
+	}
+
+	function showForecastSetup() {
+		if (!$root().length) return;
+		$('.is-fin-dashboard .ifd-forecast-context').html(
+			'<div class="ifd-forecast-setup-message"><strong>Forecast not run yet.</strong> Select Scenario, Cost Centre, Financial Year, Actual Months and 3M Actual Base Site. You may then press <strong>Fill Expenses from 3M Avg</strong>, followed by <strong>Run Forecast</strong>.</div>'
+		);
+		$('.is-fin-dashboard .ifd-forecast-kpis').empty();
+		$('.is-fin-dashboard .ifd-forecast-table-wrap').empty();
+		$('.is-fin-dashboard .ifd-forecast-charts .ifd-chart').empty();
+		setTimeout(enableSeedButton, 0);
+	}
+
+	function ensureActualMonthsControl() {
+		const $controls = $('.is-fin-dashboard .ifd-forecast-controls');
+		if (!$controls.length || $('#ifd-forecast-actual-months').length) return;
+
+		const options = ['<option value="auto">Auto</option>'];
+		for (let month = 0; month <= 12; month += 1) {
+			options.push(`<option value="${month}">${month}</option>`);
+		}
+		const $group = $(
+			`<div class="ifd-control-group"><label>Actual Months</label><select id="ifd-forecast-actual-months" class="form-control">${options.join('')}</select></div>`
+		);
+		$group.insertBefore($('#ifd-forecast-actual-source').closest('.ifd-control-group'));
+
+		const stored = window.localStorage ? localStorage.getItem(STORAGE_KEY) : null;
+		if (stored === 'auto' || /^(?:[0-9]|1[0-2])$/.test(stored || '')) {
+			$('#ifd-forecast-actual-months').val(stored);
+		}
 	}
 
 	async function seedOne(forecastScenario, targetCostCenter, sourceCostCenter, financialYear, actualMonths) {
 		return frappe.call({
-			method: ACTUAL_MONTH_SEED_METHOD,
+			method: SEED_METHOD,
 			args: {
 				forecast_scenario: forecastScenario,
 				target_cost_center: targetCostCenter,
@@ -199,130 +203,136 @@
 		});
 	}
 
-	function installSeedHandler() {
-		const $button = $('.is-fin-dashboard #ifd-seed-expenses');
-		if (!$button.length) return;
+	async function runSeedExpenses() {
+		const forecastScenario = String($('#ifd-forecast-scenario').val() || '').trim();
+		const selectedTarget = String($('#ifd-forecast-cost-centre').val() || '').trim();
+		const selectedSource = String($('#ifd-forecast-actual-source').val() || '__all__').trim();
+		const financialYear = selectedFinancialYear();
+		const actualMonths = selectedActualMonths();
 
-		forceEnableSeedButton();
-		ensureSeedMessage();
-		observeSeedButton();
-		if ($button.data('ifd-actual-months-seed-bound')) return;
+		if (!forecastScenario || !selectedTarget || !financialYear) {
+			frappe.msgprint(__('Select Forecast Scenario, Cost Centre, Financial Year and Actual Months first.'));
+			return;
+		}
 
-		$button.off('click');
-		$button.data('ifd-actual-months-seed-bound', true);
-		$button.on('click', () => {
-			const forecastScenario = String($('#ifd-forecast-scenario').val() || '').trim();
-			const selectedTarget = String($('#ifd-forecast-cost-centre').val() || '').trim();
-			const selectedSource = String($('#ifd-forecast-actual-source').val() || '__all__').trim();
-			const financialYear = selectedFinancialYear();
-			const actualMonths = selectedActualMonths();
+		const allTargets = $('#ifd-forecast-cost-centre option').map(function() {
+			const value = String($(this).val() || '').trim();
+			return value && value !== '__all__' ? value : null;
+		}).get();
+		const targets = selectedTarget === '__all__' ? allTargets : [selectedTarget];
+		if (!targets.length) {
+			frappe.msgprint(__('No individual Forecast Cost Centres are available.'));
+			return;
+		}
 
-			if (!forecastScenario || !selectedTarget || !financialYear) {
-				frappe.msgprint(__('Select a Forecast Scenario, Cost Centre and Financial Year first.'));
-				return;
-			}
+		const scopeText = selectedTarget === '__all__' ? __('ALL Cost Centres') : $('#ifd-forecast-cost-centre option:selected').text();
+		const sourceText = selectedSource === '__all__' ? __('each Cost Centre\'s own 3-month actual average') : $('#ifd-forecast-actual-source option:selected').text();
 
-			const allTargets = $('#ifd-forecast-cost-centre option').map(function() {
-				const value = String($(this).val() || '').trim();
-				return value && value !== '__all__' ? value : null;
-			}).get();
-			const targets = selectedTarget === '__all__' ? allTargets : [selectedTarget];
-
-			if (!targets.length) {
-				frappe.msgprint(__('No individual Forecast Cost Centres are available to populate.'));
-				return;
-			}
-
-			const scopeText = selectedTarget === '__all__'
-				? __('ALL individual Cost Centres')
-				: $('#ifd-forecast-cost-centre option:selected').text();
-			const sourceText = selectedSource === '__all__'
-				? __('each Cost Centre\'s own last 3-month actual average')
-				: $('#ifd-forecast-actual-source option:selected').text();
-
-			frappe.confirm(
-				__(`This will FORECAST all blue F expense months for ${scopeText} using ${sourceText}. Existing expense forecast values in those Forecast months will be overwritten. Continue?`),
-				async () => {
-					$button.prop('disabled', true);
-					frappe.dom.freeze(__('Forecasting expenses from the 3-month actual average...'));
-					let created = 0;
-					let updated = 0;
-					let deleted = 0;
-					let completed = 0;
-					try {
-						for (const target of targets) {
-							const source = selectedSource === '__all__' ? target : selectedSource;
-							const response = await seedOne(forecastScenario, target, source, financialYear, actualMonths);
-							const result = response.message || {};
-							created += Number(result.created || 0);
-							updated += Number(result.updated || 0);
-							deleted += Number(result.deleted || 0);
-							completed += 1;
-						}
-						frappe.msgprint({
-							title: __('Expenses Forecasted'),
-							indicator: 'green',
-							message: __(`Expenses have been forecasted for ${completed} Cost Centre(s). All blue F expense months were populated from the selected 3-month actual average. ${created} entries created, ${updated} updated, ${deleted} cleared. Press Run Forecast to display the updated forecast.`)
-						});
-						forecastWasBuilt = false;
-						showSetupMessage();
-					} finally {
-						frappe.dom.unfreeze();
-						forceEnableSeedButton();
+		frappe.confirm(
+			__(`This will forecast all blue F expense months for ${scopeText} using ${sourceText}. Existing forecast expense values in those months will be overwritten. Continue?`),
+			async () => {
+				frappe.dom.freeze(__('Forecasting expenses from the 3-month actual average...'));
+				let created = 0;
+				let updated = 0;
+				let deleted = 0;
+				try {
+					for (const target of targets) {
+						const source = selectedSource === '__all__' ? target : selectedSource;
+						const response = await seedOne(forecastScenario, target, source, financialYear, actualMonths);
+						const result = response.message || {};
+						created += Number(result.created || 0);
+						updated += Number(result.updated || 0);
+						deleted += Number(result.deleted || 0);
 					}
+					frappe.msgprint({
+						title: __('Expenses Forecasted'),
+						indicator: 'green',
+						message: __(`Expenses have been forecasted. ${created} entries created, ${updated} updated and ${deleted} cleared. Press Run Forecast to display the result.`)
+					});
+					showForecastSetup();
+				} finally {
+					frappe.dom.unfreeze();
+					enableSeedButton();
 				}
-			);
-		});
+			}
+		);
 	}
 
-	function installParameterHandlers() {
-		const selector = '#ifd-forecast-scenario, #ifd-forecast-cost-centre, #ifd-forecast-fy, #ifd-forecast-actual-source, #ifd-forecast-actual-months';
-		$(selector).off('change.ifd-explicit-run').on('change.ifd-explicit-run', () => markParametersChanged());
+	function prepareForecastControls() {
+		ensureActualMonthsControl();
+		const refresh = document.querySelector('.is-fin-dashboard #ifd-refresh-forecast');
+		if (refresh) refresh.textContent = 'Run Forecast';
+		enableSeedButton();
 	}
 
-	function enhanceForecastControls() {
-		installCallOverride();
-		const $controls = $('.is-fin-dashboard .ifd-forecast-controls');
-		if (!$controls.length) return;
+	function installEvents() {
+		// Capture phase sets explicit-run flags before the dashboard's own click handlers execute.
+		document.addEventListener('click', event => {
+			const button = event.target.closest('button');
+			if (!button) return;
 
-		if (!$controls.find('#ifd-forecast-actual-months').length) {
-			const options = ['<option value="auto">Auto</option>'];
-			for (let month = 0; month <= 12; month += 1) {
-				options.push(`<option value="${month}">${month}</option>`);
+			if (button.id === 'ifd-refresh-forecast') {
+				allowForecastRun = true;
+				return;
 			}
 
-			const $group = $(
-				`<div class="ifd-control-group ifd-actual-months-control">
-					<label>Actual Months</label>
-					<select id="ifd-forecast-actual-months" class="form-control">${options.join('')}</select>
-				</div>`
-			);
-			$group.insertBefore($controls.find('#ifd-forecast-actual-source').closest('.ifd-control-group'));
-
-			const stored = window.localStorage ? localStorage.getItem(STORAGE_KEY) : null;
-			if (stored !== null && (stored === 'auto' || /^(?:[0-9]|1[0-2])$/.test(stored))) {
-				$group.find('#ifd-forecast-actual-months').val(stored);
+			if (button.id === 'ifd-seed-expenses') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				runSeedExpenses();
+				return;
 			}
 
-			$group.find('#ifd-forecast-actual-months').on('change', function() {
-				const value = String($(this).val() || 'auto');
-				if (window.localStorage) localStorage.setItem(STORAGE_KEY, value);
-				markParametersChanged();
-			});
-		}
+			if (button.classList.contains('ifd-tab-button') && button.dataset.tab === 'forecast') {
+				setTimeout(() => {
+					prepareForecastControls();
+					showForecastSetup();
+				}, 0);
+				return;
+			}
 
-		installRunForecastButton();
-		installSeedHandler();
-		installParameterHandlers();
-		forceEnableSeedButton();
+			const label = String(button.textContent || '').trim();
+			if (label.includes('Run Income Statement')) {
+				allowActualRun = true;
+			}
+		}, true);
 
-		if (!forecastWasBuilt && $('.is-fin-dashboard .ifd-tab-button[data-tab="forecast"]').hasClass('active')) {
-			showSetupMessage();
-		}
+		document.addEventListener('change', event => {
+			const el = event.target;
+			if (!el || !el.closest || !el.closest('.is-fin-dashboard')) return;
+
+			if (el.id === 'ifd-forecast-actual-months') {
+				if (window.localStorage) localStorage.setItem(STORAGE_KEY, String(el.value || 'auto'));
+				allowForecastRun = false;
+				showForecastSetup();
+				return;
+			}
+
+			if (['ifd-forecast-scenario', 'ifd-forecast-cost-centre', 'ifd-forecast-fy', 'ifd-forecast-actual-source'].includes(el.id)) {
+				allowForecastRun = false;
+				setTimeout(() => {
+					prepareForecastControls();
+					showForecastSetup();
+				}, 0);
+			}
+		}, true);
 	}
 
-	installCallOverride();
-	installStyle();
-	setTimeout(enhanceForecastControls, 0);
-	setInterval(enhanceForecastControls, 250);
+	function init() {
+		if (installed) return;
+		installed = true;
+		installCallGuard();
+		installStyle();
+		installEvents();
+
+		// One-time setup only. No polling interval and no MutationObserver.
+		setTimeout(() => {
+			if ($root().length) {
+				showActualSetup();
+				prepareForecastControls();
+			}
+		}, 0);
+	}
+
+	init();
 })();
