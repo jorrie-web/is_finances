@@ -4,6 +4,8 @@
 	const ACTUAL_MONTH_SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
 	let seedObserver = null;
+	let allowForecastBuild = false;
+	let forecastWasBuilt = false;
 
 	function selectedActualMonths() {
 		const value = String($('#ifd-forecast-actual-months').val() || 'auto').trim();
@@ -14,12 +16,45 @@
 		return String($('#ifd-forecast-fy').val() || '').trim();
 	}
 
+	function emptyForecastResponse() {
+		const scenarioName = String($('#ifd-forecast-scenario').val() || '').trim();
+		const costCenter = String($('#ifd-forecast-cost-centre').val() || '__all__').trim();
+		const financialYear = selectedFinancialYear();
+		return {
+			scenario: { name: scenarioName, scenario_name: '', status: 'Draft' },
+			filters: {
+				cost_center: costCenter,
+				cost_center_label: costCenter === '__all__' ? 'All Cost Centres (Consolidated)' : costCenter,
+				financial_year: financialYear,
+				actual_months: selectedActualMonths(),
+				actual_months_applied: 0
+			},
+			editable: false,
+			months: [],
+			sections: [],
+			summary: {},
+			monthly: [],
+			fy_summary: {},
+			fy_monthly: [],
+			actuals: { period_label: 'Set parameters, fill expenses if required, then Run Forecast', summary: {}, monthly: [] },
+			uoms: [],
+			performance: { server_runtime_ms: 0, database_runtime_ms: 0, account_count: 0, entry_count: 0 }
+		};
+	}
+
 	function installCallOverride() {
 		if (!window.frappe || !frappe.call || frappe.call.__ifdActualMonthsWrapped) return;
 		const originalCall = frappe.call;
 		const wrapped = function(...args) {
 			const options = args[0];
 			if (options && typeof options === 'object' && options.method === DASHBOARD_METHOD) {
+				if (!allowForecastBuild) {
+					const response = { message: emptyForecastResponse() };
+					if (typeof options.callback === 'function') {
+						setTimeout(() => options.callback(response), 0);
+					}
+					return Promise.resolve(response);
+				}
 				args[0] = {
 					...options,
 					method: ACTUAL_MONTH_METHOD,
@@ -28,6 +63,8 @@
 						actual_months: selectedActualMonths()
 					}
 				};
+				allowForecastBuild = false;
+				forecastWasBuilt = true;
 			}
 			return originalCall.apply(this, args);
 		};
@@ -47,12 +84,21 @@
 				pointer-events: auto !important;
 				cursor: pointer !important;
 			}
-			.is-fin-dashboard .ifd-seed-expense-note {
+			.is-fin-dashboard .ifd-seed-expense-note,
+			.is-fin-dashboard .ifd-run-forecast-note {
 				font-size: 11px;
 				line-height: 1.25;
 				margin-top: 4px;
-				max-width: 280px;
+				max-width: 320px;
 				color: var(--text-muted);
+			}
+			.is-fin-dashboard .ifd-forecast-setup-message {
+				padding: 14px 16px;
+				margin-top: 10px;
+				border: 1px solid var(--border-color);
+				border-radius: 8px;
+				background: var(--fg-color);
+				font-size: 13px;
 			}
 			@media (max-width: 1250px) {
 				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: repeat(3, minmax(170px, 1fr)); }
@@ -65,6 +111,68 @@
 				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: 1fr; }
 			}
 		</style>`).appendTo('head');
+	}
+
+	function showSetupMessage() {
+		const $context = $('.is-fin-dashboard .ifd-forecast-context');
+		if (!$context.length) return;
+		$context.html(`
+			<div class="ifd-forecast-setup-message">
+				<strong>Forecast not run yet.</strong><br>
+				1. Select Forecast Scenario, Cost Centre, Financial Year and Actual Months.<br>
+				2. If required, press <strong>Fill Expenses from 3M Avg</strong>.<br>
+				3. Press <strong>Run Forecast</strong> to build the forecast.
+			</div>
+		`);
+		$('.is-fin-dashboard .ifd-forecast-kpis').empty();
+		$('.is-fin-dashboard .ifd-forecast-table-wrap').empty();
+		$('.is-fin-dashboard .ifd-forecast-charts .ifd-chart').empty();
+	}
+
+	function markParametersChanged() {
+		forecastWasBuilt = false;
+		allowForecastBuild = false;
+		setTimeout(showSetupMessage, 0);
+	}
+
+	function installRunForecastButton() {
+		const $button = $('.is-fin-dashboard #ifd-refresh-forecast');
+		if (!$button.length) return;
+		$button.text('Run Forecast');
+		if (!$button.next('.ifd-run-forecast-note').length) {
+			$('<div class="ifd-run-forecast-note">Builds the forecast only after you have selected all parameters.</div>').insertAfter($button);
+		}
+		if ($button.data('ifd-explicit-run-bound')) return;
+		$button.off('click');
+		$button.data('ifd-explicit-run-bound', true);
+		$button.on('click', () => {
+			const scenario = String($('#ifd-forecast-scenario').val() || '').trim();
+			const costCenter = String($('#ifd-forecast-cost-centre').val() || '').trim();
+			const financialYear = selectedFinancialYear();
+			if (!scenario || !costCenter || !financialYear) {
+				frappe.msgprint(__('Select Forecast Scenario, Cost Centre and Financial Year first.'));
+				return;
+			}
+			allowForecastBuild = true;
+			frappe.call({
+				method: DASHBOARD_METHOD,
+				args: {
+					forecast_scenario: scenario,
+					cost_center: costCenter,
+					financial_year: financialYear
+				},
+				freeze: true,
+				freeze_message: __('Building Forecast...')
+			}).then(r => {
+				const data = r.message || {};
+				const pageButton = $('.is-fin-dashboard #ifd-refresh-forecast');
+				pageButton.trigger('ifd-render-forecast', [data]);
+				setTimeout(() => {
+					const original = pageButton.data('ifd-original-refresh-handler');
+					if (typeof original === 'function') original();
+				}, 0);
+			});
+		});
 	}
 
 	function forceEnableSeedButton() {
@@ -170,9 +278,10 @@
 						frappe.msgprint({
 							title: __('Expenses Forecasted'),
 							indicator: 'green',
-							message: __(`Expenses have been forecasted for ${completed} Cost Centre(s). All blue F expense months were populated from the selected 3-month actual average. ${created} entries created, ${updated} updated, ${deleted} cleared.`)
+							message: __(`Expenses have been forecasted for ${completed} Cost Centre(s). All blue F expense months were populated from the selected 3-month actual average. ${created} entries created, ${updated} updated, ${deleted} cleared. Press Run Forecast to display the updated forecast.`)
 						});
-						$('.is-fin-dashboard #ifd-refresh-forecast').trigger('click');
+						forecastWasBuilt = false;
+						showSetupMessage();
 					} finally {
 						frappe.dom.unfreeze();
 						forceEnableSeedButton();
@@ -180,6 +289,11 @@
 				}
 			);
 		});
+	}
+
+	function installParameterHandlers() {
+		const selector = '#ifd-forecast-scenario, #ifd-forecast-cost-centre, #ifd-forecast-fy, #ifd-forecast-actual-source, #ifd-forecast-actual-months';
+		$(selector).off('change.ifd-explicit-run').on('change.ifd-explicit-run', () => markParametersChanged());
 	}
 
 	function enhanceForecastControls() {
@@ -209,14 +323,18 @@
 			$group.find('#ifd-forecast-actual-months').on('change', function() {
 				const value = String($(this).val() || 'auto');
 				if (window.localStorage) localStorage.setItem(STORAGE_KEY, value);
-				const $refresh = $('.is-fin-dashboard #ifd-refresh-forecast');
-				if ($refresh.length && $('.is-fin-dashboard .ifd-tab-button[data-tab="forecast"]').hasClass('active')) {
-					$refresh.trigger('click');
-				}
+				markParametersChanged();
 			});
 		}
 
+		installRunForecastButton();
 		installSeedHandler();
+		installParameterHandlers();
+		forceEnableSeedButton();
+
+		if (!forecastWasBuilt && $('.is-fin-dashboard .ifd-tab-button[data-tab="forecast"]').hasClass('active')) {
+			showSetupMessage();
+		}
 	}
 
 	installCallOverride();
