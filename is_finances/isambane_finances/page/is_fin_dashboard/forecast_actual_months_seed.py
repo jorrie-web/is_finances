@@ -252,7 +252,7 @@ def bulk_seed_expense_forecast_from_actual_average(
     target_cost_centers = target_cost_centers or []
     cost_centers = _bulk_cost_centers(scenario.company, target_cost_centers)
 
-    fy_start, _, actual_cutoff, first_forecast_month, last_forecast_month, periods = _forecast_window(
+    fy_start, fy_end_unused, actual_cutoff, first_forecast_month, last_forecast_month, periods = _forecast_window(
         scenario, financial_year, actual_months
     )
     if not periods:
@@ -262,7 +262,6 @@ def bulk_seed_expense_forecast_from_actual_average(
             "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
         }
 
-    # With zero selected actual months there is no valid base period to average.
     if actual_cutoff < fy_start:
         frappe.throw(_("Select at least 1 Actual Month before using Fill Expenses from Actual Average."))
 
