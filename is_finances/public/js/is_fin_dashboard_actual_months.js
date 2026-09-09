@@ -1,6 +1,8 @@
 (() => {
 	const DASHBOARD_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.is_fin_dashboard.get_forecast_data';
 	const ACTUAL_MONTH_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months.get_forecast_data';
+	const ORIGINAL_SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.is_fin_dashboard.seed_expense_forecast_from_actual_average';
+	const ACTUAL_MONTH_SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
 
 	function selectedActualMonths() {
@@ -17,6 +19,15 @@
 				args[0] = {
 					...options,
 					method: ACTUAL_MONTH_METHOD,
+					args: {
+						...(options.args || {}),
+						actual_months: selectedActualMonths()
+					}
+				};
+			} else if (options && typeof options === 'object' && options.method === ORIGINAL_SEED_METHOD) {
+				args[0] = {
+					...options,
+					method: ACTUAL_MONTH_SEED_METHOD,
 					args: {
 						...(options.args || {}),
 						actual_months: selectedActualMonths()
