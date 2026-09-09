@@ -14,9 +14,9 @@ add_to_apps_screen = [
 	}
 ]
 
-app_include_js = [
-	"/assets/is_finances/js/is_fin_dashboard_actual_months.js",
-]
+page_js = {
+	"is-fin-dashboard": "public/js/is_fin_dashboard_actual_months.js",
+}
 
 doctype_js = {
 	"Payroll Sheet": "public/js/payroll_sheet.js"
