@@ -39,6 +39,43 @@ def _actual_cutoff_for_selection(scenario, fy_start, fy_end, actual_months):
     return min(fy_end, base_cutoff, requested_cutoff), selected
 
 
+def _forecast_months_for_selection(
+    fy_start,
+    scenario_start,
+    scenario_end,
+    actual_cutoff,
+    selected_months,
+):
+    """Build the 12 FY months for the selected Actual/Forecast split.
+
+    Auto mode keeps the scenario's configured forecast start. When the user
+    explicitly selects the number of actual months, the very next month becomes
+    a forecast month. This prevents a blank gap between the last Actual month
+    and the first Forecast month (for example 4 Actual Months = Mar-Jun actual,
+    Jul-Feb forecast).
+    """
+    if selected_months is None:
+        return dashboard._forecast_year_months(
+            fy_start,
+            scenario_start,
+            scenario_end,
+            actual_cutoff=actual_cutoff,
+        )
+
+    cutoff_month = date(actual_cutoff.year, actual_cutoff.month, 1)
+    if actual_cutoff < fy_start:
+        effective_forecast_start = fy_start
+    else:
+        effective_forecast_start = dashboard._next_month(cutoff_month)
+
+    return dashboard._forecast_year_months(
+        fy_start,
+        effective_forecast_start,
+        scenario_end,
+        actual_cutoff=actual_cutoff,
+    )
+
+
 @frappe.whitelist()
 def get_forecast_data(forecast_scenario, cost_center, financial_year, actual_months=AUTO_ACTUAL_MONTHS):
     """Return the dashboard forecast grid with a selectable number of actual FY months.
@@ -46,16 +83,16 @@ def get_forecast_data(forecast_scenario, cost_center, financial_year, actual_mon
     `actual_months` is 0-12, counted from March for the selected financial year.
     `auto` preserves the scenario's normal Actual Cut-off Date behaviour. A numeric
     selection is always capped at the scenario's permitted actual cut-off so future
-    months can never be presented as actuals.
+    months can never be presented as actuals. For an explicit numeric selection,
+    the month immediately after the last actual month is always a forecast month.
     """
     started = frappe.utils.now_datetime()
     scenario = dashboard._get_forecast_scenario(forecast_scenario)
     cost_center = (cost_center or dashboard.ALL_FORECAST_COST_CENTRES).strip()
 
-    valid_years = dashboard._scenario_financial_years(
-        getdate(scenario.forecast_start_month),
-        getdate(scenario.forecast_end_month),
-    )
+    scenario_start = getdate(scenario.forecast_start_month)
+    scenario_end = getdate(scenario.forecast_end_month)
+    valid_years = dashboard._scenario_financial_years(scenario_start, scenario_end)
     if financial_year not in valid_years:
         frappe.throw(_("Financial Year is outside the selected Forecast Scenario."))
 
@@ -63,11 +100,12 @@ def get_forecast_data(forecast_scenario, cost_center, financial_year, actual_mon
     actual_cutoff, selected_months = _actual_cutoff_for_selection(
         scenario, fy_start, fy_end, actual_months
     )
-    months = dashboard._forecast_year_months(
+    months = _forecast_months_for_selection(
         fy_start,
-        getdate(scenario.forecast_start_month),
-        getdate(scenario.forecast_end_month),
-        actual_cutoff=actual_cutoff,
+        scenario_start,
+        scenario_end,
+        actual_cutoff,
+        selected_months,
     )
 
     if cost_center != dashboard.ALL_FORECAST_COST_CENTRES:
@@ -126,8 +164,8 @@ def get_forecast_data(forecast_scenario, cost_center, financial_year, actual_mon
             "company": scenario.company,
             "scenario_type": scenario.scenario_type,
             "status": scenario.status,
-            "forecast_start_month": str(getdate(scenario.forecast_start_month)),
-            "forecast_end_month": str(getdate(scenario.forecast_end_month)),
+            "forecast_start_month": str(scenario_start),
+            "forecast_end_month": str(scenario_end),
             "actual_cutoff_date": str(actual_cutoff),
         },
         "filters": {
