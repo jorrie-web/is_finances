@@ -2,7 +2,7 @@
 	if (window.__ifdDashboardPageControlsInstalled) return;
 	window.__ifdDashboardPageControlsInstalled = true;
 
-	const SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
+	const SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.bulk_seed_expense_forecast_from_actual_average';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
 
 	function selectedActualMonths() {
@@ -64,20 +64,6 @@
 		enableSeedButton();
 	}
 
-	async function seedOne(forecastScenario, targetCostCenter, sourceCostCenter, financialYear, actualMonths) {
-		return frappe.call({
-			method: SEED_METHOD,
-			args: {
-				forecast_scenario: forecastScenario,
-				target_cost_center: targetCostCenter,
-				source_cost_center: sourceCostCenter,
-				financial_year: financialYear,
-				actual_months: actualMonths
-			},
-			freeze: false
-		});
-	}
-
 	async function fillExpenses() {
 		const scenario = String(document.getElementById('ifd-forecast-scenario')?.value || '').trim();
 		const target = String(document.getElementById('ifd-forecast-cost-centre')?.value || '').trim();
@@ -111,22 +97,23 @@
 		if (!confirmed) return;
 
 		frappe.dom.freeze(__('Forecasting expenses from the 3-month actual average...'));
-		let created = 0;
-		let updated = 0;
-		let deleted = 0;
 		try {
-			for (const targetCostCenter of targets) {
-				const sourceCostCenter = source === '__all__' ? targetCostCenter : source;
-				const response = await seedOne(scenario, targetCostCenter, sourceCostCenter, financialYear, actualMonths);
-				const result = response.message || {};
-				created += Number(result.created || 0);
-				updated += Number(result.updated || 0);
-				deleted += Number(result.deleted || 0);
-			}
+			const response = await frappe.call({
+				method: SEED_METHOD,
+				args: {
+					forecast_scenario: scenario,
+					target_cost_centers: targets,
+					source_cost_center: source,
+					financial_year: financialYear,
+					actual_months: actualMonths
+				},
+				freeze: false
+			});
+			const result = response.message || {};
 			frappe.msgprint({
 				title: __('Expenses Forecasted'),
 				indicator: 'green',
-				message: __(`Expenses have been forecasted. ${created} entries created, ${updated} updated and ${deleted} cleared. Press Run Forecast to display the result.`)
+				message: __(`Expenses have been forecasted for ${result.cost_center_count || targets.length} Cost Centre(s) across ${result.month_count || 0} Forecast month(s). ${result.created || 0} entries created and ${result.deleted || 0} previous entries replaced. Completed in ${Math.round(Number(result.runtime_ms || 0))} ms. Press Run Forecast to display the result.`)
 			});
 			showForecastSetup();
 		} finally {
