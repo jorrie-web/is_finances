@@ -28,6 +28,38 @@
 		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored === 'auto' || /^(?:[0-9]|1[0-2])$/.test(stored || '')) select.value = stored;
 	}
+
+	function addCopyButtons(root) {
+		(root || document).querySelectorAll('.is-fin-dashboard .ifd-forecast-table-wrap .ifd-fc-money-input[type="number"]').forEach(input => {
+			const cell = input.closest('td');
+			if (!cell || cell.querySelector('.ifd-copy-all-forecast')) return;
+			const b = document.createElement('button');
+			b.type = 'button';
+			b.className = 'btn btn-xs btn-default ifd-copy-all-forecast';
+			b.textContent = 'Copy to all F';
+			b.title = 'Copy this expense value to every remaining Forecast month for this account and site';
+			cell.appendChild(b);
+		});
+	}
+
+	function installCopyButtonObserver() {
+		const wrap = document.querySelector('.is-fin-dashboard .ifd-forecast-table-wrap');
+		if (!wrap) return;
+		addCopyButtons(wrap);
+		if (wrap.__ifdCopyObserver) return;
+		let scheduled = false;
+		const observer = new MutationObserver(() => {
+			if (scheduled) return;
+			scheduled = true;
+			requestAnimationFrame(() => {
+				scheduled = false;
+				addCopyButtons(wrap);
+			});
+		});
+		observer.observe(wrap, { childList: true, subtree: true });
+		wrap.__ifdCopyObserver = observer;
+	}
+
 	function prepareUI() {
 		ensureActualMonthsControl();
 		const source = document.getElementById('ifd-forecast-actual-source');
@@ -40,18 +72,21 @@
 		if (run) run.textContent = 'Run Forecast';
 		const seed = document.getElementById('ifd-seed-expenses');
 		if (seed) { seed.disabled = false; seed.classList.remove('disabled'); seed.textContent = 'Fill Expenses from Actual Avg'; }
-		addCopyButtons();
+		installCopyButtonObserver();
 	}
+
 	function setupMessage(text) {
 		const el = document.querySelector('.is-fin-dashboard .ifd-forecast-context');
 		if (el) el.innerHTML = `<div class="ifd-forecast-setup-message"><strong>${text || 'Forecast not run yet.'}</strong></div>`;
 	}
+
 	async function persistActualMonths() {
 		const scenario = String(document.getElementById('ifd-forecast-scenario')?.value || '').trim();
 		if (!scenario || !financialYear() || actualMonths() === 'auto') return null;
 		const r = await frappe.call({ method: APPLY_MONTHS_METHOD, args: { forecast_scenario: scenario, financial_year: financialYear(), actual_months: actualMonths() }, freeze: false });
 		return r.message || {};
 	}
+
 	async function fillExpenses() {
 		const scenario = String(document.getElementById('ifd-forecast-scenario')?.value || '').trim();
 		const target = String(document.getElementById('ifd-forecast-cost-centre')?.value || '').trim();
@@ -71,23 +106,23 @@
 			document.getElementById('ifd-refresh-forecast')?.click();
 		} finally { frappe.dom.unfreeze(); }
 	}
-	function addCopyButtons() {
-		document.querySelectorAll('.is-fin-dashboard .ifd-forecast-table-wrap .ifd-fc-input[type="number"]').forEach(input => {
-			const cell = input.closest('td');
-			if (!cell || cell.querySelector('.ifd-copy-all-forecast')) return;
-			const b = document.createElement('button');
-			b.type = 'button'; b.className = 'btn btn-xs btn-default ifd-copy-all-forecast'; b.textContent = 'Copy all F';
-			b.title = 'Copy this value to every Forecast month for this account and site';
-			cell.appendChild(b);
-		});
-	}
+
 	function copyAll(button) {
-		const source = button.closest('td')?.querySelector('.ifd-fc-input[type="number"]');
+		const source = button.closest('td')?.querySelector('.ifd-fc-money-input[type="number"]');
 		if (!source) return;
-		const selector = `.ifd-forecast-table-wrap .ifd-fc-input[type="number"][data-account="${CSS.escape(source.dataset.account)}"][data-field="${CSS.escape(source.dataset.field)}"]`;
+		const account = String(source.dataset.account || '');
+		const field = String(source.dataset.field || 'forecast_amount');
+		const sourcePeriod = String(source.dataset.period || '');
+		const selector = `.ifd-forecast-table-wrap .ifd-fc-money-input[type="number"][data-account="${CSS.escape(account)}"][data-field="${CSS.escape(field)}"]`;
 		let n = 0;
-		document.querySelectorAll(selector).forEach(input => { input.value = source.value; input.dispatchEvent(new Event('input', { bubbles: true })); n++; });
-		frappe.show_alert({ message: __(`Copied value to ${n} Forecast month(s). Press Save Forecast to save all changes.`), indicator: 'blue' }, 6);
+		document.querySelectorAll(selector).forEach(input => {
+			const period = String(input.dataset.period || '');
+			if (sourcePeriod && period && period < sourcePeriod) return;
+			input.value = source.value;
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			n++;
+		});
+		frappe.show_alert({ message: __(`Copied expense to ${n} Forecast month(s). Press Save Forecast to save the changes.`), indicator: 'blue' }, 6);
 	}
 
 	document.addEventListener('click', event => {
@@ -107,9 +142,8 @@
 		const el = event.target;
 		if (!el?.closest?.('.is-fin-dashboard')) return;
 		if (el.id === 'ifd-forecast-scenario') {
-			// Selecting a scenario is itself an explicit request to view it. Allow the
-			// dashboard's normal change handler to load the last saved database values.
 			state().forecast = true;
+			setTimeout(installCopyButtonObserver, 0);
 			return;
 		}
 		if (el.id === 'ifd-forecast-actual-months') {
@@ -122,14 +156,13 @@
 			return;
 		}
 		if (['ifd-forecast-cost-centre', 'ifd-forecast-fy'].includes(el.id)) {
-			// Once a scenario is open, moving between its site/FY views should show
-			// the persisted result immediately rather than an empty placeholder.
 			state().forecast = true;
+			setTimeout(installCopyButtonObserver, 0);
 		}
 	}, true);
 
 	const style = document.createElement('style');
-	style.textContent = '.ifd-copy-all-forecast{display:block;margin:3px 0 0 auto;padding:1px 4px;font-size:8px;line-height:1.3}';
+	style.textContent = '.ifd-copy-all-forecast{display:block;margin:3px 0 0 auto;padding:2px 5px;font-size:9px;line-height:1.3;white-space:nowrap}';
 	document.head.appendChild(style);
 	setTimeout(() => { if (document.querySelector('.is-fin-dashboard')) prepareUI(); }, 0);
 })();
