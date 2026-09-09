@@ -29,6 +29,26 @@
 		if (stored === 'auto' || /^(?:[0-9]|1[0-2])$/.test(stored || '')) select.value = stored;
 	}
 
+	function keepSeedAvailable() {
+		const seed = document.getElementById('ifd-seed-expenses');
+		if (!seed) return;
+		seed.disabled = false;
+		seed.removeAttribute('disabled');
+		seed.classList.remove('disabled');
+		seed.textContent = 'Fill Expenses from Actual Avg';
+	}
+
+	function installSeedAvailabilityGuard() {
+		const seed = document.getElementById('ifd-seed-expenses');
+		if (!seed || seed.__ifdAvailabilityObserver) return;
+		keepSeedAvailable();
+		const observer = new MutationObserver(() => {
+			if (seed.disabled || seed.hasAttribute('disabled')) keepSeedAvailable();
+		});
+		observer.observe(seed, { attributes: true, attributeFilter: ['disabled', 'class'] });
+		seed.__ifdAvailabilityObserver = observer;
+	}
+
 	function addCopyButtons(root) {
 		(root || document).querySelectorAll('.is-fin-dashboard .ifd-forecast-table-wrap .ifd-fc-money-input[type="number"]').forEach(input => {
 			const cell = input.closest('td');
@@ -70,8 +90,8 @@
 		}
 		const run = document.getElementById('ifd-refresh-forecast');
 		if (run) run.textContent = 'Run Forecast';
-		const seed = document.getElementById('ifd-seed-expenses');
-		if (seed) { seed.disabled = false; seed.classList.remove('disabled'); seed.textContent = 'Fill Expenses from Actual Avg'; }
+		keepSeedAvailable();
+		installSeedAvailabilityGuard();
 		installCopyButtonObserver();
 	}
 
@@ -94,7 +114,9 @@
 		if (!scenario || !target || !financialYear() || !targetSelect) return frappe.msgprint(__('Select Forecast Scenario, Cost Centre, Financial Year and Actual Months first.'));
 		const all = Array.from(targetSelect.options).map(o => String(o.value || '').trim()).filter(v => v && v !== '__all__');
 		const targets = target === '__all__' ? all : [target];
-		const ok = await new Promise(resolve => frappe.confirm(__('This will overwrite Forecast expense values using each Cost Centre\'s own available actual average. Continue?'), () => resolve(true), () => resolve(false)));
+		if (!targets.length) return frappe.msgprint(__('No individual Cost Centres are available to populate.'));
+		const scopeText = target === '__all__' ? __('ALL Cost Centres in the consolidated forecast') : __('the selected Cost Centre');
+		const ok = await new Promise(resolve => frappe.confirm(__(`This will overwrite Forecast expense values for ${scopeText} using each Cost Centre's own available actual average. Continue?`), () => resolve(true), () => resolve(false)));
 		if (!ok) return;
 		frappe.dom.freeze(__('Forecasting expenses from actual averages...'));
 		try {
@@ -104,7 +126,10 @@
 			frappe.msgprint({ title: __('Expenses Forecasted'), indicator: 'green', message: __(`Expenses saved for ${result.cost_center_count || targets.length} Cost Centre(s).`) });
 			state().forecast = true;
 			document.getElementById('ifd-refresh-forecast')?.click();
-		} finally { frappe.dom.unfreeze(); }
+		} finally {
+			frappe.dom.unfreeze();
+			keepSeedAvailable();
+		}
 	}
 
 	function copyAll(button) {
@@ -143,7 +168,7 @@
 		if (!el?.closest?.('.is-fin-dashboard')) return;
 		if (el.id === 'ifd-forecast-scenario') {
 			state().forecast = true;
-			setTimeout(installCopyButtonObserver, 0);
+			setTimeout(prepareUI, 0);
 			return;
 		}
 		if (el.id === 'ifd-forecast-actual-months') {
@@ -153,11 +178,12 @@
 				try { await persistActualMonths(); } catch (e) { setupMessage('Could not update scenario dates.'); throw e; }
 			}
 			setupMessage('Forecast parameters updated. Select the Scenario again to load its saved forecast, or press Run Forecast.');
+			keepSeedAvailable();
 			return;
 		}
 		if (['ifd-forecast-cost-centre', 'ifd-forecast-fy'].includes(el.id)) {
 			state().forecast = true;
-			setTimeout(installCopyButtonObserver, 0);
+			setTimeout(prepareUI, 0);
 		}
 	}, true);
 
