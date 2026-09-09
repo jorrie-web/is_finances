@@ -10,6 +10,10 @@
 		return value || 'auto';
 	}
 
+	function selectedFinancialYear() {
+		return String($('#ifd-forecast-fy').val() || '').trim();
+	}
+
 	function installCallOverride() {
 		if (!window.frappe || !frappe.call || frappe.call.__ifdActualMonthsWrapped) return;
 		const originalCall = frappe.call;
@@ -30,6 +34,7 @@
 					method: ACTUAL_MONTH_SEED_METHOD,
 					args: {
 						...(options.args || {}),
+						financial_year: selectedFinancialYear(),
 						actual_months: selectedActualMonths()
 					}
 				};
