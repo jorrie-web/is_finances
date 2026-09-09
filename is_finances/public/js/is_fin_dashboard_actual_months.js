@@ -35,6 +35,14 @@
 		if (stored === 'auto' || /^(?:[0-9]|1[0-2])$/.test(stored || '')) select.value = stored;
 	}
 
+	function hideBaseSiteControl() {
+		const source = document.getElementById('ifd-forecast-actual-source');
+		if (!source) return;
+		source.value = '__all__';
+		const group = source.closest('.ifd-control-group');
+		if (group) group.style.display = 'none';
+	}
+
 	function enableSeedButton() {
 		const button = document.getElementById('ifd-seed-expenses');
 		if (!button) return;
@@ -42,10 +50,12 @@
 		button.removeAttribute('disabled');
 		button.removeAttribute('aria-disabled');
 		button.classList.remove('disabled');
+		button.textContent = 'Fill Expenses from Actual Avg';
 	}
 
 	function prepareForecastUI() {
 		ensureActualMonthsControl();
+		hideBaseSiteControl();
 		const run = document.getElementById('ifd-refresh-forecast');
 		if (run) run.textContent = 'Run Forecast';
 		enableSeedButton();
@@ -60,14 +70,13 @@
 	function showForecastSetup() {
 		const context = document.querySelector('.is-fin-dashboard .ifd-forecast-context');
 		if (!context) return;
-		context.innerHTML = '<div class="ifd-forecast-setup-message"><strong>Forecast not run yet.</strong> Select Scenario, Cost Centre, Financial Year, Actual Months and 3M Actual Base Site. If required, press <strong>Fill Expenses from 3M Avg</strong>, then press <strong>Run Forecast</strong>.</div>';
+		context.innerHTML = '<div class="ifd-forecast-setup-message"><strong>Forecast not run yet.</strong> Select Scenario, Cost Centre, Financial Year and Actual Months. Numeric Actual Months automatically determines the Forecast start month. If required, press <strong>Fill Expenses from Actual Avg</strong>, then press <strong>Run Forecast</strong>.</div>';
 		enableSeedButton();
 	}
 
 	async function fillExpenses() {
 		const scenario = String(document.getElementById('ifd-forecast-scenario')?.value || '').trim();
 		const target = String(document.getElementById('ifd-forecast-cost-centre')?.value || '').trim();
-		const source = String(document.getElementById('ifd-forecast-actual-source')?.value || '__all__').trim();
 		const financialYear = selectedFinancialYear();
 		const actualMonths = selectedActualMonths();
 
@@ -89,21 +98,21 @@
 
 		const confirmed = await new Promise(resolve => {
 			frappe.confirm(
-				__('This will forecast all blue F expense months from the selected 3-month actual average. Existing forecast expense values in those months will be overwritten. Continue?'),
+				__('This will forecast all blue F expense months using each Cost Centre\'s own available actual-month average (up to the last 3 months). Existing forecast expense values in those months will be overwritten. Continue?'),
 				() => resolve(true),
 				() => resolve(false)
 			);
 		});
 		if (!confirmed) return;
 
-		frappe.dom.freeze(__('Forecasting expenses from the 3-month actual average...'));
+		frappe.dom.freeze(__('Forecasting expenses from actual averages...'));
 		try {
 			const response = await frappe.call({
 				method: SEED_METHOD,
 				args: {
 					forecast_scenario: scenario,
 					target_cost_centers: targets,
-					source_cost_center: source,
+					source_cost_center: '__all__',
 					financial_year: financialYear,
 					actual_months: actualMonths
 				},
@@ -113,7 +122,7 @@
 			frappe.msgprint({
 				title: __('Expenses Forecasted'),
 				indicator: 'green',
-				message: __(`Expenses have been forecasted for ${result.cost_center_count || targets.length} Cost Centre(s) across ${result.month_count || 0} Forecast month(s). ${result.created || 0} entries created and ${result.deleted || 0} previous entries replaced. Completed in ${Math.round(Number(result.runtime_ms || 0))} ms. Press Run Forecast to display the result.`)
+				message: __(`Expenses have been forecasted for ${result.cost_center_count || targets.length} Cost Centre(s) across ${result.month_count || 0} Forecast month(s) using the ${result.average_label || 'actual average'}. ${result.created || 0} entries created and ${result.deleted || 0} previous entries replaced. Completed in ${Math.round(Number(result.runtime_ms || 0))} ms. Press Run Forecast to display the result.`)
 			});
 			showForecastSetup();
 		} finally {
@@ -164,7 +173,7 @@
 			return;
 		}
 
-		if (['ifd-forecast-scenario', 'ifd-forecast-cost-centre', 'ifd-forecast-fy', 'ifd-forecast-actual-source'].includes(el.id)) {
+		if (['ifd-forecast-scenario', 'ifd-forecast-cost-centre', 'ifd-forecast-fy'].includes(el.id)) {
 			window.__ifdManualRun.forecast = false;
 			setTimeout(() => {
 				prepareForecastUI();
