@@ -47,14 +47,19 @@
 		const originalCall = frappe.call;
 		const wrapped = function(...args) {
 			const options = args[0];
-			if (options && typeof options === 'object' && options.method === DASHBOARD_METHOD) {
+			const isForecastBuild = options && typeof options === 'object' &&
+				(options.method === DASHBOARD_METHOD || options.method === ACTUAL_MONTH_METHOD);
+
+			if (isForecastBuild) {
 				if (!allowForecastBuild) {
 					const response = { message: emptyForecastResponse() };
 					if (typeof options.callback === 'function') {
 						setTimeout(() => options.callback(response), 0);
 					}
+					setTimeout(showSetupMessage, 0);
 					return Promise.resolve(response);
 				}
+
 				args[0] = {
 					...options,
 					method: ACTUAL_MONTH_METHOD,
