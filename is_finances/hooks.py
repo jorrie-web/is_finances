@@ -14,6 +14,13 @@ add_to_apps_screen = [
 	}
 ]
 
+# Lightweight guard loads early so the dashboard never auto-runs expensive
+# Income Statement / Forecast queries on page open.
+app_include_js = [
+	"/assets/is_finances/js/is_fin_dashboard_run_guard.js",
+]
+
+# Dashboard controls and Actual Months logic are scoped to this page only.
 page_js = {
 	"is-fin-dashboard": "public/js/is_fin_dashboard_actual_months.js",
 }
