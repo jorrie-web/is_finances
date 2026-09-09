@@ -3,6 +3,7 @@
 	const ACTUAL_MONTH_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months.get_forecast_data';
 	const ACTUAL_MONTH_SEED_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months_seed.seed_expense_forecast_from_actual_average';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
+	let seedObserver = null;
 
 	function selectedActualMonths() {
 		const value = String($('#ifd-forecast-actual-months').val() || 'auto').trim();
@@ -41,6 +42,18 @@
 			.is-fin-dashboard .ifd-forecast-controls {
 				grid-template-columns: minmax(190px, 1.25fr) minmax(190px, 1.15fr) minmax(135px, .7fr) minmax(125px, .65fr) minmax(190px, 1.15fr) auto;
 			}
+			.is-fin-dashboard #ifd-seed-expenses.ifd-force-enabled {
+				opacity: 1 !important;
+				pointer-events: auto !important;
+				cursor: pointer !important;
+			}
+			.is-fin-dashboard .ifd-seed-expense-note {
+				font-size: 11px;
+				line-height: 1.25;
+				margin-top: 4px;
+				max-width: 280px;
+				color: var(--text-muted);
+			}
 			@media (max-width: 1250px) {
 				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: repeat(3, minmax(170px, 1fr)); }
 				.is-fin-dashboard .ifd-forecast-actions { grid-column: 1 / -1; }
@@ -52,6 +65,32 @@
 				.is-fin-dashboard .ifd-forecast-controls { grid-template-columns: 1fr; }
 			}
 		</style>`).appendTo('head');
+	}
+
+	function forceEnableSeedButton() {
+		const button = document.querySelector('.is-fin-dashboard #ifd-seed-expenses');
+		if (!button) return;
+		button.disabled = false;
+		button.removeAttribute('disabled');
+		button.removeAttribute('aria-disabled');
+		button.classList.remove('disabled');
+		button.classList.add('ifd-force-enabled');
+	}
+
+	function ensureSeedMessage() {
+		const $button = $('.is-fin-dashboard #ifd-seed-expenses');
+		if (!$button.length || $('.is-fin-dashboard .ifd-seed-expense-note').length) return;
+		$('<div class="ifd-seed-expense-note">Pressing this button forecasts all blue F expense months from the selected 3-month actual average.</div>')
+			.insertAfter($button);
+	}
+
+	function observeSeedButton() {
+		const button = document.querySelector('.is-fin-dashboard #ifd-seed-expenses');
+		if (!button || (seedObserver && seedObserver.__button === button)) return;
+		if (seedObserver) seedObserver.disconnect();
+		seedObserver = new MutationObserver(() => forceEnableSeedButton());
+		seedObserver.__button = button;
+		seedObserver.observe(button, { attributes: true, attributeFilter: ['disabled', 'class', 'aria-disabled'] });
 	}
 
 	async function seedOne(forecastScenario, targetCostCenter, sourceCostCenter, financialYear, actualMonths) {
@@ -72,10 +111,9 @@
 		const $button = $('.is-fin-dashboard #ifd-seed-expenses');
 		if (!$button.length) return;
 
-		// The base dashboard disables this button in consolidated read-only mode.
-		// Filling is still valid because the data is written into each underlying
-		// individual Cost Center and the consolidated view then reflects the sum.
-		$button.prop('disabled', false);
+		forceEnableSeedButton();
+		ensureSeedMessage();
+		observeSeedButton();
 		if ($button.data('ifd-actual-months-seed-bound')) return;
 
 		$button.off('click');
@@ -111,10 +149,10 @@
 				: $('#ifd-forecast-actual-source option:selected').text();
 
 			frappe.confirm(
-				__(`Fill every Forecast expense month for ${scopeText} using ${sourceText}? Existing expense forecast values in the selected Forecast months will be overwritten.`),
+				__(`This will FORECAST all blue F expense months for ${scopeText} using ${sourceText}. Existing expense forecast values in those Forecast months will be overwritten. Continue?`),
 				async () => {
 					$button.prop('disabled', true);
-					frappe.dom.freeze(__('Populating all Forecast expense months...'));
+					frappe.dom.freeze(__('Forecasting expenses from the 3-month actual average...'));
 					let created = 0;
 					let updated = 0;
 					let deleted = 0;
@@ -129,14 +167,15 @@
 							deleted += Number(result.deleted || 0);
 							completed += 1;
 						}
-						frappe.show_alert({
-							message: __(`Forecast expenses populated for ${completed} Cost Centre(s): ${created} created, ${updated} updated, ${deleted} cleared.`),
-							indicator: 'green'
-						}, 10);
+						frappe.msgprint({
+							title: __('Expenses Forecasted'),
+							indicator: 'green',
+							message: __(`Expenses have been forecasted for ${completed} Cost Centre(s). All blue F expense months were populated from the selected 3-month actual average. ${created} entries created, ${updated} updated, ${deleted} cleared.`)
+						});
 						$('.is-fin-dashboard #ifd-refresh-forecast').trigger('click');
 					} finally {
 						frappe.dom.unfreeze();
-						$button.prop('disabled', false);
+						forceEnableSeedButton();
 					}
 				}
 			);
@@ -183,5 +222,5 @@
 	installCallOverride();
 	installStyle();
 	setTimeout(enhanceForecastControls, 0);
-	setInterval(enhanceForecastControls, 750);
+	setInterval(enhanceForecastControls, 250);
 })();
