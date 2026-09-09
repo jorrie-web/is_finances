@@ -136,43 +136,22 @@
 	}
 
 	function installRunForecastButton() {
-		const $button = $('.is-fin-dashboard #ifd-refresh-forecast');
-		if (!$button.length) return;
-		$button.text('Run Forecast');
+		const button = document.querySelector('.is-fin-dashboard #ifd-refresh-forecast');
+		if (!button) return;
+		button.textContent = 'Run Forecast';
+		const $button = $(button);
 		if (!$button.next('.ifd-run-forecast-note').length) {
 			$('<div class="ifd-run-forecast-note">Builds the forecast only after you have selected all parameters.</div>').insertAfter($button);
 		}
-		if ($button.data('ifd-explicit-run-bound')) return;
-		$button.off('click');
-		$button.data('ifd-explicit-run-bound', true);
-		$button.on('click', () => {
+		if (button.__ifdExplicitRunCapture) return;
+		button.__ifdExplicitRunCapture = true;
+		button.addEventListener('click', () => {
 			const scenario = String($('#ifd-forecast-scenario').val() || '').trim();
 			const costCenter = String($('#ifd-forecast-cost-centre').val() || '').trim();
 			const financialYear = selectedFinancialYear();
-			if (!scenario || !costCenter || !financialYear) {
-				frappe.msgprint(__('Select Forecast Scenario, Cost Centre and Financial Year first.'));
-				return;
-			}
+			if (!scenario || !costCenter || !financialYear) return;
 			allowForecastBuild = true;
-			frappe.call({
-				method: DASHBOARD_METHOD,
-				args: {
-					forecast_scenario: scenario,
-					cost_center: costCenter,
-					financial_year: financialYear
-				},
-				freeze: true,
-				freeze_message: __('Building Forecast...')
-			}).then(r => {
-				const data = r.message || {};
-				const pageButton = $('.is-fin-dashboard #ifd-refresh-forecast');
-				pageButton.trigger('ifd-render-forecast', [data]);
-				setTimeout(() => {
-					const original = pageButton.data('ifd-original-refresh-handler');
-					if (typeof original === 'function') original();
-				}, 0);
-			});
-		});
+		}, true);
 	}
 
 	function forceEnableSeedButton() {
