@@ -6,6 +6,11 @@
 	const APPLY_MONTHS_METHOD = 'is_finances.isambane_finances.page.is_fin_dashboard.forecast_actual_months.apply_actual_months_to_scenario';
 	const STORAGE_KEY = 'is_fin_dashboard_actual_months';
 
+	function manualRunState() {
+		window.__ifdManualRun = window.__ifdManualRun || { actual: false, forecast: false };
+		return window.__ifdManualRun;
+	}
+
 	function selectedActualMonths() {
 		const el = document.getElementById('ifd-forecast-actual-months');
 		return el ? String(el.value || 'auto') : 'auto';
@@ -96,13 +101,11 @@
 		const individualTargets = Array.from(targetSelect.options).map(o => String(o.value || '').trim()).filter(v => v && v !== '__all__');
 		const targets = target === '__all__' ? individualTargets : [target];
 		if (!targets.length) return;
-
 		const confirmed = await new Promise(resolve => frappe.confirm(
 			__('This will forecast all blue F expense months using each Cost Centre\'s own available actual-month average (up to the last 3 months). Existing forecast expense values will be overwritten. Continue?'),
 			() => resolve(true), () => resolve(false)
 		));
 		if (!confirmed) return;
-
 		frappe.dom.freeze(__('Forecasting expenses from actual averages...'));
 		try {
 			await persistActualMonths();
@@ -114,7 +117,7 @@
 			const result = response.message || {};
 			frappe.msgprint({
 				title: __('Expenses Forecasted'), indicator: 'green',
-				message: __(`Expenses saved for ${result.cost_center_count || targets.length} Cost Centre(s) across ${result.month_count || 0} Forecast month(s) using the ${result.average_label || 'actual average'}. ${result.created || 0} entries created and ${result.deleted || 0} previous entries replaced. Press Run Forecast to display the saved result.`)
+				message: __(`Expenses saved for ${result.cost_center_count || targets.length} Cost Centre(s) across ${result.month_count || 0} Forecast month(s). ${result.created || 0} entries created and ${result.deleted || 0} previous entries replaced. Press Run Forecast to display the saved result.`)
 			});
 			showForecastSetup('Expense forecast has been saved.');
 		} finally {
@@ -132,8 +135,6 @@
 			button.className = 'btn btn-xs btn-default ifd-copy-all-forecast';
 			button.textContent = 'Copy all F';
 			button.title = 'Copy this value to every Forecast month for this account and site';
-			button.dataset.account = input.dataset.account || '';
-			button.dataset.field = input.dataset.field || '';
 			cell.appendChild(button);
 		});
 	}
@@ -149,8 +150,7 @@
 	}
 
 	function copyValueToAllForecastMonths(button) {
-		const cell = button.closest('td');
-		const source = cell?.querySelector('.ifd-fc-input[type="number"]');
+		const source = button.closest('td')?.querySelector('.ifd-fc-input[type="number"]');
 		if (!source) return;
 		const account = source.dataset.account;
 		const field = source.dataset.field;
@@ -160,7 +160,6 @@
 		document.querySelectorAll(selector).forEach(input => {
 			input.value = value;
 			input.dispatchEvent(new Event('input', { bubbles: true }));
-			input.dispatchEvent(new Event('change', { bubbles: true }));
 			count += 1;
 		});
 		frappe.show_alert({ message: __(`Copied value to ${count} Forecast month(s). Press Save Forecast to save all changes.`), indicator: 'blue' }, 6);
@@ -169,24 +168,34 @@
 	function onClick(event) {
 		const copyButton = event.target.closest('.ifd-copy-all-forecast');
 		if (copyButton) {
-			event.preventDefault(); event.stopImmediatePropagation();
+			event.preventDefault();
+			event.stopImmediatePropagation();
 			copyValueToAllForecastMonths(copyButton);
 			return;
 		}
 		const button = event.target.closest('button');
 		if (!button) return;
-		if (String(button.textContent || '').includes('Run Income Statement')) {
-			window.__ifdManualRun = window.__ifdManualRun || { actual: false, forecast: false };
-			window.__ifdManualRun.actual = true;
+		const text = String(button.textContent || '').trim();
+		if (text.includes('Run Income Statement')) {
+			manualRunState().actual = true;
 			return;
 		}
 		if (button.id === 'ifd-refresh-forecast') {
-			window.__ifdManualRun = window.__ifdManualRun || { actual: false, forecast: false };
-			window.__ifdManualRun.forecast = true;
+			manualRunState().forecast = true;
+			return;
+		}
+		// The dashboard saves first and then immediately reloads the forecast.
+		// Permit that one reload through the run guard so the persisted database
+		// values are shown instead of the guard's empty placeholder response.
+		if (button.id === 'ifd-save-forecast' || text.includes('Save Forecast')) {
+			manualRunState().forecast = true;
 			return;
 		}
 		if (button.id === 'ifd-seed-expenses') {
-			event.preventDefault(); event.stopImmediatePropagation(); fillExpenses(); return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			fillExpenses();
+			return;
 		}
 		if (button.classList.contains('ifd-tab-button') && button.dataset.tab === 'forecast') {
 			setTimeout(() => { prepareForecastUI(); showForecastSetup(); }, 0);
@@ -198,17 +207,20 @@
 		if (!el || !el.closest?.('.is-fin-dashboard')) return;
 		if (el.id === 'ifd-forecast-actual-months') {
 			localStorage.setItem(STORAGE_KEY, String(el.value || 'auto'));
-			window.__ifdManualRun.forecast = false;
+			manualRunState().forecast = false;
 			if (String(el.value || 'auto') !== 'auto') {
 				try {
 					const result = await persistActualMonths();
 					showForecastSetup(result?.forecast_start_month ? `Scenario updated: Forecast starts ${result.forecast_start_month}.` : 'Forecast parameters updated.');
-				} catch (e) { showForecastSetup('Could not update scenario dates.'); throw e; }
+				} catch (e) {
+					showForecastSetup('Could not update scenario dates.');
+					throw e;
+				}
 			} else showForecastSetup();
 			return;
 		}
 		if (['ifd-forecast-scenario', 'ifd-forecast-cost-centre', 'ifd-forecast-fy'].includes(el.id)) {
-			window.__ifdManualRun.forecast = false;
+			manualRunState().forecast = false;
 			setTimeout(() => { prepareForecastUI(); showForecastSetup(); }, 0);
 		}
 	}
@@ -220,6 +232,8 @@
 	document.addEventListener('change', onChange, true);
 	setTimeout(() => {
 		if (!document.querySelector('.is-fin-dashboard')) return;
-		showIncomeSetup(); prepareForecastUI(); installCopyButtons();
+		showIncomeSetup();
+		prepareForecastUI();
+		installCopyButtons();
 	}, 0);
 })();
