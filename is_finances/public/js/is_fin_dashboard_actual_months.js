@@ -123,11 +123,7 @@
 			await persistActualMonths();
 			const r = await frappe.call({ method: SEED_METHOD, args: { forecast_scenario: scenario, target_cost_centers: targets, source_cost_center: '__all__', financial_year: financialYear(), actual_months: actualMonths() }, freeze: false });
 			const result = r.message || {};
-			frappe.msgprint({
-				title: __('Expenses Forecasted'),
-				indicator: 'green',
-				message: __(`Expenses saved for ${result.cost_center_count || targets.length} Cost Centre(s). Click Run Forecast to display the updated forecast.`)
-			});
+			frappe.msgprint({ title: __('Expenses Forecasted'), indicator: 'green', message: __(`Expenses saved for ${result.cost_center_count || targets.length} Cost Centre(s). Click Run Forecast to display the updated forecast.`) });
 			state().forecast = false;
 			setupMessage('Expense forecast has been saved. Click Run Forecast to display it.');
 		} finally {
@@ -156,31 +152,17 @@
 
 	document.addEventListener('click', event => {
 		const copy = event.target.closest('.ifd-copy-all-forecast');
-		if (copy) {
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			copyAll(copy);
-			return;
-		}
+		if (copy) { event.preventDefault(); event.stopImmediatePropagation(); copyAll(copy); return; }
 		const button = event.target.closest('button');
 		if (!button) return;
 		const text = String(button.textContent || '').trim();
 		if (text.includes('Run Income Statement')) state().actual = true;
 		if (button.id === 'ifd-refresh-forecast') state().forecast = true;
-		// Preserve saving behaviour: Save Forecast may reload the persisted result
-		// after a successful save, so that one reload remains permitted.
 		if (button.id === 'ifd-save-forecast' || text.includes('Save Forecast')) state().forecast = true;
-		if (button.id === 'ifd-seed-expenses') {
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			fillExpenses();
-		}
+		if (button.id === 'ifd-seed-expenses') { event.preventDefault(); event.stopImmediatePropagation(); fillExpenses(); }
 		if (button.classList.contains('ifd-tab-button') && button.dataset.tab === 'forecast') {
 			state().forecast = false;
-			setTimeout(() => {
-				prepareUI();
-				setupMessage('Select Scenario, Cost Centre, Financial Year and Actual Months, then click Run Forecast.');
-			}, 0);
+			setTimeout(() => { prepareUI(); setupMessage('Select Scenario, Cost Centre, Financial Year and Actual Months, then click Run Forecast.'); }, 0);
 		}
 	}, true);
 
@@ -190,42 +172,35 @@
 
 		if (el.id === 'ifd-forecast-scenario') {
 			state().forecast = false;
-			setTimeout(() => {
-				prepareUI();
-				setupMessage('Scenario selected. Set the remaining parameters, then click Run Forecast.');
-			}, 0);
+			setTimeout(() => { prepareUI(); setupMessage('Scenario selected. Set the remaining parameters, then click Run Forecast.'); }, 0);
 			return;
 		}
 
 		if (el.id === 'ifd-forecast-actual-months') {
+			event.stopImmediatePropagation();
 			localStorage.setItem(STORAGE_KEY, String(el.value || 'auto'));
 			state().forecast = false;
 			if (String(el.value || 'auto') !== 'auto') {
-				try {
-					await persistActualMonths();
-				} catch (e) {
-					setupMessage('Could not update scenario dates.');
-					throw e;
-				}
+				try { await persistActualMonths(); } catch (e) { setupMessage('Could not update scenario dates.'); throw e; }
 			}
 			setupMessage('Actual Months updated. Click Run Forecast when ready.');
 			keepSeedAvailable();
 			return;
 		}
 
-		if (['ifd-forecast-cost-centre', 'ifd-forecast-fy'].includes(el.id)) {
+		if (el.id === 'ifd-forecast-cost-centre' || el.id === 'ifd-forecast-fy') {
+			// The base dashboard attaches change handlers that call _load_forecast_data().
+			// Stop those handlers here. Changing these selectors must only update the
+			// selected parameters; Run Forecast is the only action that may build data.
+			event.stopImmediatePropagation();
 			state().forecast = false;
-			setTimeout(() => {
-				prepareUI();
-				setupMessage('Forecast parameters updated. Click Run Forecast when ready.');
-			}, 0);
+			setTimeout(() => { prepareUI(); setupMessage('Forecast parameters updated. Click Run Forecast when ready.'); }, 0);
+			return;
 		}
 	}, true);
 
 	const style = document.createElement('style');
 	style.textContent = '.ifd-copy-all-forecast{display:block;margin:3px 0 0 auto;padding:2px 5px;font-size:9px;line-height:1.3;white-space:nowrap}';
 	document.head.appendChild(style);
-	setTimeout(() => {
-		if (document.querySelector('.is-fin-dashboard')) prepareUI();
-	}, 0);
+	setTimeout(() => { if (document.querySelector('.is-fin-dashboard')) prepareUI(); }, 0);
 })();
