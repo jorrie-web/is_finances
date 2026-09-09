@@ -58,32 +58,7 @@ def _actual_average_for_cutoff(scenario, source_cost_center, cutoff):
     }
 
 
-@frappe.whitelist()
-def seed_expense_forecast_from_actual_average(
-    forecast_scenario,
-    target_cost_center,
-    source_cost_center,
-    financial_year,
-    actual_months=AUTO_ACTUAL_MONTHS,
-):
-    """Fill every blue Forecast month from the selected 3M actual average.
-
-    The selected Actual Months control defines the split. If 4 is selected for
-    FY 2026/27, Mar-Jun remain Actual and every Jul-Feb expense Forecast column
-    is populated. Existing forecast values in those months are overwritten.
-    """
-    started = time.perf_counter()
-    scenario = dashboard._get_forecast_scenario(forecast_scenario)
-
-    if scenario.status != "Draft":
-        frappe.throw(_("Only Draft Forecast Scenarios can be seeded."))
-    if not cint(scenario.is_active):
-        frappe.throw(_("Forecast Scenario is not active."))
-
-    target_cost_center = (target_cost_center or "").strip()
-    if not target_cost_center or target_cost_center == dashboard.ALL_FORECAST_COST_CENTRES:
-        frappe.throw(_("Select an individual target Cost Center before populating forecast values."))
-
+def _forecast_window(scenario, financial_year, actual_months):
     fy_start, fy_end = dashboard._forecast_financial_year_bounds(financial_year)
     actual_cutoff, selected_months = _actual_cutoff_for_selection(
         scenario, fy_start, fy_end, actual_months
@@ -107,32 +82,7 @@ def seed_expense_forecast_from_actual_average(
         getdate(scenario.forecast_end_month).month,
         1,
     )
-    selected_fy_end_month = date(fy_end.year, fy_end.month, 1)
-    last_forecast_month = min(scenario_end, selected_fy_end_month)
-
-    if first_forecast_month > last_forecast_month:
-        return {
-            "created": 0,
-            "updated": 0,
-            "deleted": 0,
-            "account_count": 0,
-            "month_count": 0,
-            "source_label": "",
-            "period_label": "",
-            "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
-        }
-
-    target_info = dashboard._forecast_cost_center_info(
-        scenario.company, target_cost_center, allow_all=False
-    )
-    average_payload = _actual_average_for_cutoff(scenario, source_cost_center, actual_cutoff)
-    averages = average_payload["averages"]
-
-    expense_accounts = [
-        row for row in dashboard._get_forecast_accounts(scenario.company)
-        if row.report_dimension in ("IS-Cost of Sales", "IS-Other Expenditure")
-        and (row.forecast_method or "Amount").strip().lower() == "amount"
-    ]
+    last_forecast_month = min(scenario_end, date(fy_end.year, fy_end.month, 1))
 
     periods = []
     current = first_forecast_month
@@ -140,139 +90,270 @@ def seed_expense_forecast_from_actual_average(
         periods.append(current)
         current = dashboard._next_month(current)
 
-    existing = frappe.db.sql(
-        """
-        SELECT name, account, forecast_period
-        FROM `tabIS Forecast Entry`
-        WHERE forecast_scenario = %(scenario)s
-          AND cost_center = %(cost_center)s
-          AND forecast_period >= %(start)s
-          AND forecast_period <= %(end)s
+    return fy_start, fy_end, actual_cutoff, first_forecast_month, last_forecast_month, periods
+
+
+def _expense_accounts(company):
+    return [
+        row for row in dashboard._get_forecast_accounts(company)
+        if row.report_dimension in ("IS-Cost of Sales", "IS-Other Expenditure")
+        and (row.forecast_method or "Amount").strip().lower() == "amount"
+    ]
+
+
+def _bulk_cost_centers(company, targets):
+    targets = [str(value).strip() for value in (targets or []) if str(value).strip()]
+    if not targets:
+        return []
+
+    placeholders = ",".join(["%s"] * len(targets))
+    rows = frappe.db.sql(
+        f"""
+        SELECT name, cost_center_name, cost_center_number
+        FROM `tabCost Center`
+        WHERE name IN ({placeholders})
+          AND company = %s
+          AND COALESCE(is_group, 0) = 0
+          AND COALESCE(disabled, 0) = 0
         """,
-        {
-            "scenario": scenario.name,
-            "cost_center": target_cost_center,
-            "start": first_forecast_month,
-            "end": last_forecast_month,
-        },
+        tuple(targets) + (company,),
         as_dict=True,
     )
-    existing_keys = {
-        (
-            row.account,
-            date(getdate(row.forecast_period).year, getdate(row.forecast_period).month, 1),
-        ): row.name
-        for row in existing
-    }
+    by_name = {row.name: row for row in rows}
+    missing = [name for name in targets if name not in by_name]
+    if missing:
+        frappe.throw(_("Invalid Forecast Cost Center(s): {0}").format(", ".join(missing)))
+    for row in rows:
+        if not (row.cost_center_number or "").strip():
+            frappe.throw(_("Cost Center {0} does not have a Cost Center Number.").format(row.name))
+    return [by_name[name] for name in targets]
 
-    updated = 0
-    deleted = 0
-    new_rows = []
-    user = frappe.session.user
-    now = frappe.utils.now_datetime()
-    source_note = _("Seeded from {0} actual average: {1}").format(
-        average_payload["source_label"], average_payload["period_label"]
+
+def _bulk_own_site_averages(scenario, cost_centers, cutoff):
+    """Read all selected sites' 3M expense averages in one Sage query."""
+    if not cost_centers:
+        return {}, ""
+
+    anchor_month = date(cutoff.year, cutoff.month, 1)
+    start_month = getdate(add_months(anchor_month, -2))
+    average_from = date(start_month.year, start_month.month, 1)
+    average_to = cutoff
+    branches = [(row.cost_center_number or "").strip() for row in cost_centers]
+    branch_placeholders = ",".join(["%s"] * len(branches))
+    signed = dashboard._signed_amount_sql()
+
+    # Blank Sage branches are treated as MID, matching the dashboard's existing rule.
+    rows = frappe.db.sql(
+        f"""
+        SELECT
+            CASE
+                WHEN p.brch IS NULL OR TRIM(p.brch) = '' THEN 'MID'
+                ELSE TRIM(p.brch)
+            END AS branch_key,
+            LEFT(TRIM(COALESCE(p.master_sub_account, '')), 4) AS group_account,
+            SUM({signed}) / 3.0 AS average_amount
+        FROM `tabSage POSTGL Entry` p
+        INNER JOIN `tabSageAccountType` a
+            ON a.sage_account_type = p.iaccounttype
+        WHERE p.company = %s
+          AND p.tx_date >= %s
+          AND p.tx_date < DATE_ADD(%s, INTERVAL 1 DAY)
+          AND a.report_dimension IN ('IS-Cost of Sales', 'IS-Other Expenditure')
+          AND TRIM(COALESCE(p.master_sub_account, '')) REGEXP '^[0-9]{{4}}'
+          AND (
+                TRIM(COALESCE(p.brch, '')) IN ({branch_placeholders})
+                OR ('MID' IN ({branch_placeholders}) AND (p.brch IS NULL OR TRIM(p.brch) = ''))
+              )
+        GROUP BY
+            CASE WHEN p.brch IS NULL OR TRIM(p.brch) = '' THEN 'MID' ELSE TRIM(p.brch) END,
+            LEFT(TRIM(COALESCE(p.master_sub_account, '')), 4)
+        """,
+        tuple([scenario.company, average_from, average_to] + branches + branches),
+        as_dict=True,
     )
 
-    for account in expense_accounts:
-        average = flt(averages.get(str(account.account_number), 0), 2)
-        account_existing = [
-            key for key in existing_keys
-            if key[0] == account.account and first_forecast_month <= key[1] <= last_forecast_month
-        ]
+    averages = {}
+    for row in rows:
+        averages.setdefault(str(row.branch_key), {})[str(row.group_account)] = flt(row.average_amount, 2)
 
-        if not average:
-            if account_existing:
-                names = [existing_keys[key] for key in account_existing]
-                for i in range(0, len(names), 500):
-                    chunk = names[i:i + 500]
-                    placeholders = ",".join(["%s"] * len(chunk))
-                    frappe.db.sql(
-                        f"DELETE FROM `tabIS Forecast Entry` WHERE name IN ({placeholders})",
-                        tuple(chunk),
-                    )
-                    deleted += len(chunk)
-            continue
+    period_label = f"{average_from.strftime('%d %b %Y')} - {average_to.strftime('%d %b %Y')}"
+    return averages, period_label
 
-        if account_existing:
-            frappe.db.sql(
-                """
-                UPDATE `tabIS Forecast Entry`
-                SET forecast_amount = %(amount)s,
-                    volume = 0,
-                    price_per_unit = 0,
-                    input_source = 'Last 3M Actual Avg',
-                    comments = %(comments)s,
-                    modified = %(modified)s,
-                    modified_by = %(modified_by)s
-                WHERE forecast_scenario = %(scenario)s
-                  AND cost_center = %(cost_center)s
-                  AND account = %(account)s
-                  AND forecast_period >= %(start)s
-                  AND forecast_period <= %(end)s
-                """,
-                {
-                    "amount": average,
-                    "comments": source_note,
-                    "modified": now,
-                    "modified_by": user,
-                    "scenario": scenario.name,
-                    "cost_center": target_cost_center,
-                    "account": account.account,
-                    "start": first_forecast_month,
-                    "end": last_forecast_month,
-                },
-            )
-            updated += len(account_existing)
 
-        for period in periods:
-            if (account.account, period) in existing_keys:
+def _insert_forecast_rows(rows):
+    if not rows:
+        return 0
+
+    fields = [
+        "name", "creation", "modified", "modified_by", "owner", "docstatus", "idx",
+        "forecast_scenario", "company", "forecast_period", "financial_year", "cost_center",
+        "account", "account_number", "account_name", "sage_account_type",
+        "custom_report_dimension", "custom_forecast_enabled", "forecast_method",
+        "ebitda_treatment", "volume", "volume_uom", "price_per_unit", "forecast_amount",
+        "cost_center_number", "input_source", "comments",
+    ]
+    row_placeholder = "(" + ",".join(["%s"] * len(fields)) + ")"
+    for i in range(0, len(rows), 500):
+        chunk = rows[i:i + 500]
+        sql = (
+            "INSERT INTO `tabIS Forecast Entry` (`"
+            + "`,`".join(fields)
+            + "`) VALUES "
+            + ",".join([row_placeholder] * len(chunk))
+        )
+        flat = []
+        for row in chunk:
+            flat.extend(row)
+        frappe.db.sql(sql, tuple(flat))
+    return len(rows)
+
+
+@frappe.whitelist()
+def bulk_seed_expense_forecast_from_actual_average(
+    forecast_scenario,
+    target_cost_centers,
+    source_cost_center,
+    financial_year,
+    actual_months=AUTO_ACTUAL_MONTHS,
+):
+    """High-performance 3M expense fill for one or many Forecast Cost Centers.
+
+    Consolidated mode is handled in one request, one Sage aggregation query and
+    bulk delete/insert operations instead of one full server round-trip per site.
+    """
+    started = time.perf_counter()
+    scenario = dashboard._get_forecast_scenario(forecast_scenario)
+    if scenario.status != "Draft":
+        frappe.throw(_("Only Draft Forecast Scenarios can be seeded."))
+    if not cint(scenario.is_active):
+        frappe.throw(_("Forecast Scenario is not active."))
+
+    if isinstance(target_cost_centers, str):
+        try:
+            target_cost_centers = frappe.parse_json(target_cost_centers)
+        except Exception:
+            target_cost_centers = [target_cost_centers]
+    target_cost_centers = target_cost_centers or []
+    cost_centers = _bulk_cost_centers(scenario.company, target_cost_centers)
+
+    _, _, actual_cutoff, first_forecast_month, last_forecast_month, periods = _forecast_window(
+        scenario, financial_year, actual_months
+    )
+    if not periods:
+        return {
+            "created": 0, "updated": 0, "deleted": 0,
+            "account_count": 0, "month_count": 0, "cost_center_count": len(cost_centers),
+            "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
+        }
+
+    expense_accounts = _expense_accounts(scenario.company)
+    if not expense_accounts:
+        return {
+            "created": 0, "updated": 0, "deleted": 0,
+            "account_count": 0, "month_count": len(periods), "cost_center_count": len(cost_centers),
+            "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
+        }
+
+    source_cost_center = (source_cost_center or dashboard.ALL_FORECAST_COST_CENTRES).strip()
+    own_site_mode = source_cost_center == dashboard.ALL_FORECAST_COST_CENTRES
+    if own_site_mode:
+        averages_by_branch, period_label = _bulk_own_site_averages(scenario, cost_centers, actual_cutoff)
+        shared_averages = None
+        source_label = _("Each Cost Centre")
+    else:
+        payload = _actual_average_for_cutoff(scenario, source_cost_center, actual_cutoff)
+        shared_averages = payload["averages"]
+        averages_by_branch = None
+        period_label = payload["period_label"]
+        source_label = payload["source_label"]
+
+    target_names = [row.name for row in cost_centers]
+    account_names = [row.account for row in expense_accounts]
+    target_ph = ",".join(["%s"] * len(target_names))
+    account_ph = ",".join(["%s"] * len(account_names))
+
+    # The Fill action is explicitly an overwrite, so replacing the selected
+    # expense forecast window is both faster and clearer than row-by-row updates.
+    existing_count = frappe.db.sql(
+        f"""
+        SELECT COUNT(*)
+        FROM `tabIS Forecast Entry`
+        WHERE forecast_scenario = %s
+          AND cost_center IN ({target_ph})
+          AND account IN ({account_ph})
+          AND forecast_period >= %s
+          AND forecast_period <= %s
+        """,
+        tuple([scenario.name] + target_names + account_names + [first_forecast_month, last_forecast_month]),
+    )[0][0]
+
+    frappe.db.sql(
+        f"""
+        DELETE FROM `tabIS Forecast Entry`
+        WHERE forecast_scenario = %s
+          AND cost_center IN ({target_ph})
+          AND account IN ({account_ph})
+          AND forecast_period >= %s
+          AND forecast_period <= %s
+        """,
+        tuple([scenario.name] + target_names + account_names + [first_forecast_month, last_forecast_month]),
+    )
+
+    user = frappe.session.user
+    now = frappe.utils.now_datetime()
+    new_rows = []
+    for cc in cost_centers:
+        branch = (cc.cost_center_number or "").strip()
+        averages = averages_by_branch.get(branch, {}) if own_site_mode else shared_averages
+        note = _("Seeded from {0} 3M actual average: {1}").format(
+            f"{branch} - {cc.cost_center_name or cc.name}" if own_site_mode else source_label,
+            period_label,
+        )
+        for account in expense_accounts:
+            average = flt((averages or {}).get(str(account.account_number), 0), 2)
+            if not average:
                 continue
-            fy_start_year = period.year if period.month >= 3 else period.year - 1
-            new_rows.append(
-                (
+            for period in periods:
+                fy_start_year = period.year if period.month >= 3 else period.year - 1
+                new_rows.append((
                     frappe.generate_hash(length=10), now, now, user, user, 0, 0,
                     scenario.name, scenario.company, period,
-                    dashboard._financial_year_label(fy_start_year), target_cost_center,
+                    dashboard._financial_year_label(fy_start_year), cc.name,
                     account.account, account.account_number, account.account_name,
                     account.sage_account_type or "", account.report_dimension,
                     1, account.forecast_method or "Amount", account.ebitda_treatment or "Normal",
                     0, account.default_forecast_uom or "", 0, average,
-                    target_info["cost_center_number"], "Last 3M Actual Avg", source_note,
-                )
-            )
+                    branch, "Last 3M Actual Avg", note,
+                ))
 
-    if new_rows:
-        fields = [
-            "name", "creation", "modified", "modified_by", "owner", "docstatus", "idx",
-            "forecast_scenario", "company", "forecast_period", "financial_year", "cost_center",
-            "account", "account_number", "account_name", "sage_account_type",
-            "custom_report_dimension", "custom_forecast_enabled", "forecast_method",
-            "ebitda_treatment", "volume", "volume_uom", "price_per_unit", "forecast_amount",
-            "cost_center_number", "input_source", "comments",
-        ]
-        row_placeholder = "(" + ",".join(["%s"] * len(fields)) + ")"
-        for i in range(0, len(new_rows), 250):
-            chunk = new_rows[i:i + 250]
-            sql = (
-                "INSERT INTO `tabIS Forecast Entry` (`"
-                + "`,`".join(fields)
-                + "`) VALUES "
-                + ",".join([row_placeholder] * len(chunk))
-            )
-            flat = []
-            for row in chunk:
-                flat.extend(row)
-            frappe.db.sql(sql, tuple(flat))
-
+    created = _insert_forecast_rows(new_rows)
     frappe.db.commit()
     return {
-        "created": len(new_rows),
-        "updated": updated,
-        "deleted": deleted,
+        "created": created,
+        "updated": 0,
+        "deleted": cint(existing_count),
         "account_count": len(expense_accounts),
         "month_count": len(periods),
-        "source_label": average_payload["source_label"],
-        "period_label": average_payload["period_label"],
+        "cost_center_count": len(cost_centers),
+        "source_label": source_label,
+        "period_label": period_label,
         "runtime_ms": round((time.perf_counter() - started) * 1000, 1),
     }
+
+
+@frappe.whitelist()
+def seed_expense_forecast_from_actual_average(
+    forecast_scenario,
+    target_cost_center,
+    source_cost_center,
+    financial_year,
+    actual_months=AUTO_ACTUAL_MONTHS,
+):
+    """Backward-compatible single-site wrapper around the bulk implementation."""
+    return bulk_seed_expense_forecast_from_actual_average(
+        forecast_scenario=forecast_scenario,
+        target_cost_centers=[target_cost_center],
+        source_cost_center=source_cost_center,
+        financial_year=financial_year,
+        actual_months=actual_months,
+    )
